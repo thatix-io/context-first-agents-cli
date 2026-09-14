@@ -6,6 +6,14 @@
   },
   "description": "Evolution of context-first-cli: manage the Context-First methodology across any project AND orchestrate dynamic, ephemeral AI agents from specs. All agent orchestration lives in .md command templates; the Node layer only scaffolds and manages.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thatix-io/context-first-agents-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thatix-io/context-first-agents-cli/issues"
+  },
+  "homepage": "https://github.com/thatix-io/context-first-agents-cli#readme",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
