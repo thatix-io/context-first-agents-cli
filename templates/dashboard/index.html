@@ -61,6 +61,17 @@
   .stale { font-size:12px; color:#f0b429; } .idle { font-size:12px; color:var(--muted); }
   .progress { height:6px; background:#0e1420; }
   .progress > i { display:block; height:100%; background:var(--done); transition:width .5s; }
+
+  /* pipeline stepper */
+  .stepper { display:flex; align-items:center; gap:0; padding:10px 16px; background:#131a28; border-top:1px solid var(--border); flex-wrap:wrap; }
+  .sstep { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; padding:4px 9px; border-radius:20px; border:1px solid var(--border); }
+  .sstep .sdot { width:14px; text-align:center; font-size:10px; }
+  .sstep.done { color:var(--done); background:#12281c; border-color:#1c3a2a; }
+  .sstep.cur { color:var(--run); background:#2a2410; border-color:#5a4d1e; }
+  .sstep.cur .sdot { animation:ping 1.3s infinite; }
+  .sstep.pending { color:var(--muted); background:transparent; }
+  .sline { width:22px; height:2px; background:var(--border); margin:0 2px; }
+  .sline.on { background:var(--done); }
   .body { display:block; }
   .session.collapsed .body { display:none; }
 
@@ -202,6 +213,23 @@ function card(w){
   return c;
 }
 
+/* ---------------- pipeline stepper ---------------- */
+function stepper(stages){
+  // current = first pending stage (the one to do next); done stages are green
+  let curIdx = stages.findIndex(st=>st.status!=='done');
+  const wrap = el('div','stepper');
+  stages.forEach((st,i)=>{
+    if(i>0) wrap.appendChild(el('span','sline'+(stages[i-1].status==='done'?' on':'')));
+    const cls = st.status==='done' ? 'done' : (i===curIdx ? 'cur' : 'pending');
+    const node = el('span','sstep '+cls);
+    node.appendChild(el('span','sdot', st.status==='done'?'✓':(i===curIdx?'▸':'')));
+    node.appendChild(el('span','slabel', esc(st.label)));
+    if(st.at) node.title = st.label+' — '+new Date(st.at).toLocaleString();
+    wrap.appendChild(node);
+  });
+  return wrap;
+}
+
 /* ---------------- session (accordion) ---------------- */
 function session(s){
   const ws = s.workers||[];
@@ -224,6 +252,9 @@ function session(s){
   bar.appendChild(el('span','pill st-'+(s.status||'unknown'), esc(s.status||'unknown')));
   bar.onclick=()=>{ if(collapsed.has(s.issueId)) collapsed.delete(s.issueId); else collapsed.add(s.issueId); saveCollapsed(); render(); };
   box.appendChild(bar);
+
+  // pipeline stepper (refine → spec → orchestrate → pr), derived from artifacts on disk
+  if(s.pipeline&&s.pipeline.length) box.appendChild(stepper(s.pipeline));
 
   const total=ws.length, done=ws.filter(w=>w.status==='done').length;
   const prog=el('div','progress'); const bar2=el('i'); bar2.style.width=total?Math.round(done/total*100)+'%':'0%'; prog.appendChild(bar2); box.appendChild(prog);

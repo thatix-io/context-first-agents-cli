@@ -24,6 +24,14 @@ export interface WorkerState {
   verdict?: string | null;
 }
 
+export interface PipelineStage {
+  key: string;
+  label: string;
+  /** 'done' if the stage artifact exists; 'pending' otherwise. */
+  status: 'done' | 'pending';
+  at?: string | null;
+}
+
 export interface SessionState {
   issueId: string;
   title?: string;
@@ -34,8 +42,41 @@ export interface SessionState {
   repos?: string[];
   waves?: string[][];
   workers: WorkerState[];
+  /** Product/eng stages inferred from artifacts on disk (refine → spec → orchestrate → pr). */
+  pipeline?: PipelineStage[];
   /** true when built from execution-plan.md fallback (no state.json yet). */
   fromPlanFallback?: boolean;
+}
+
+/**
+ * The main pipeline stages and the artifact that proves each one ran. A stage is "done"
+ * when any of its files exists in the session dir; the newest file's mtime is its time.
+ * These are the non-agent steps (refine/spec/pr) plus orchestrate (the agent phase).
+ */
+const PIPELINE_STAGES: Array<{ key: string; label: string; files: string[] }> = [
+  { key: 'refine', label: 'refine', files: ['refined.md'] },
+  { key: 'spec', label: 'spec', files: ['prd.md', 'spec.md'] },
+  { key: 'orchestrate', label: 'orchestrate', files: ['state.json', 'execution-plan.md'] },
+  { key: 'pr', label: 'pr', files: ['pr.md', 'pr-description.md'] },
+];
+
+async function detectPipeline(sessionDir: string): Promise<PipelineStage[]> {
+  const out: PipelineStage[] = [];
+  for (const stage of PIPELINE_STAGES) {
+    let at: string | null = null;
+    for (const f of stage.files) {
+      const p = path.join(sessionDir, f);
+      try {
+        const st = await fs.stat(p);
+        const mtime = st.mtime.toISOString();
+        if (!at || mtime > at) at = mtime;
+      } catch {
+        /* file absent — skip */
+      }
+    }
+    out.push({ key: stage.key, label: stage.label, status: at ? 'done' : 'pending', at });
+  }
+  return out;
 }
 
 async function readJson<T>(file: string): Promise<T | null> {
@@ -72,6 +113,8 @@ export async function readSession(orchestratorDir: string, issueId: string): Pro
     }
   }
 
+  const pipeline = await detectPipeline(sdir);
+
   if (state || workers.length) {
     return {
       issueId,
@@ -83,11 +126,14 @@ export async function readSession(orchestratorDir: string, issueId: string): Pro
       repos: state?.repos,
       waves: state?.waves,
       workers: workers.length ? workers : wavesToWorkers(state?.waves),
+      pipeline,
     };
   }
 
-  // Fallback: parse execution-plan.md so old sessions still render.
-  return parsePlanFallback(sdir, issueId);
+  // Fallback: parse execution-plan.md so old sessions still render (attach pipeline too).
+  const fb = await parsePlanFallback(sdir, issueId);
+  fb.pipeline = pipeline;
+  return fb;
 }
 
 function deriveStatus(workers: WorkerState[]): SessionState['status'] {
