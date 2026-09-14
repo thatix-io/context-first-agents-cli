@@ -104,6 +104,41 @@ async function startServer(cwd: string, projectName: string, opts: DashboardOpts
         return;
       }
 
+      if (url.pathname === '/api/map') {
+        // Full tree: every project → its sessions → their agents (lightweight).
+        const reg = (await readRegistry()) as Registry;
+        const projects = await Promise.all(
+          (reg?.projects ?? []).map(async (p) => {
+            const ids = await listSessions(p.path).catch(() => []);
+            const sessions = await Promise.all(
+              ids.map(async (id) => {
+                const s = await readSession(p.path, id).catch(() => null);
+                if (!s) return null;
+                return {
+                  issueId: s.issueId,
+                  title: s.title,
+                  status: s.status,
+                  complexity: s.complexity,
+                  agents: (s.workers ?? []).map((w) => ({
+                    id: w.id,
+                    name: w.name ?? w.id,
+                    archetype: w.archetype,
+                    status: w.status,
+                    currentStep: w.currentStep ?? null,
+                  })),
+                };
+              })
+            );
+            const clean = sessions.filter(Boolean);
+            const running = clean.filter((s) => s!.status === 'running').length;
+            return { name: p.name, path: p.path, running, sessions: clean };
+          })
+        );
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ port, projects }));
+        return;
+      }
+
       if (url.pathname === '/api/sessions') {
         const reg = (await readRegistry()) as Registry;
         const proj = pickProject(reg, url.searchParams.get('project'));

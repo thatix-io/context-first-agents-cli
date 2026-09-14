@@ -21,6 +21,68 @@
   @media(max-width:640px){ header { padding:12px 14px; gap:10px; } }
   header h1 { font-size:15px; margin:0; font-weight:600; cursor:pointer; }
   header .crumb { color:var(--accent); }
+  .nav { display:flex; gap:4px; }
+  .navlink { font-size:12px; color:var(--muted); padding:5px 11px; border-radius:7px; border:1px solid transparent; }
+  .navlink:hover { color:var(--text); background:#1c2436; }
+  .navlink.on { color:var(--text); background:#1c2436; border-color:var(--border); }
+
+  /* ---- Map view ---- */
+  .map-toolbar { display:flex; align-items:center; gap:14px; margin-bottom:16px; flex-wrap:wrap; }
+  .seg { display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .seg button { background:transparent; color:var(--muted); border:0; padding:7px 13px; font-size:12px; cursor:pointer; font-family:inherit; }
+  .seg button + button { border-left:1px solid var(--border); }
+  .seg button.on { background:var(--accent); color:#08111f; font-weight:600; }
+  .map-filter { display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--muted); }
+  .map-filter select { background:#0e1420; color:var(--text); border:1px solid var(--border); border-radius:7px; padding:5px 8px; font-family:inherit; font-size:12px; }
+  .map-stage { position:relative; border:1px solid var(--border); border-radius:12px; background:radial-gradient(circle at 50% 40%, #131c2e 0%, #0e1420 70%); min-height:70vh; overflow:hidden; }
+  .map-stage svg { width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
+  .map-stage svg.grabbing { cursor:grabbing; }
+  .map-stage:fullscreen { border-radius:0; min-height:100vh; }
+  .map-stage.fs { min-height:100vh; }
+  .fs-btn { font-size:12px; color:var(--muted); background:#0e1420; border:1px solid var(--border); border-radius:7px; padding:6px 11px; cursor:pointer; font-family:inherit; }
+  .fs-btn:hover { border-color:var(--accent); color:var(--text); }
+  .zoom-ctrl { position:absolute; right:12px; bottom:12px; display:flex; flex-direction:column; gap:4px; z-index:3; }
+  .zoom-ctrl button { width:30px; height:30px; font-size:16px; background:#0e1420cc; color:var(--text); border:1px solid var(--border); border-radius:7px; cursor:pointer; line-height:1; }
+  .zoom-ctrl button:hover { border-color:var(--accent); }
+  .zoom-hint { position:absolute; left:12px; bottom:12px; font-size:10px; color:#5c6780; z-index:3; pointer-events:none; }
+
+  /* radial / force nodes */
+  .mnode { cursor:pointer; }
+  .mnode circle { transition:.2s; }
+  .mnode text { font-size:11px; fill:var(--text); pointer-events:none; }
+  .mnode .sub { fill:var(--muted); font-size:10px; }
+  .medge { stroke:#2a3346; fill:none; }
+  .medge.hot { stroke:#f0b429; opacity:.55; }
+  .n-center circle { fill:#243049; stroke:#3a4560; stroke-width:2; }
+  .n-project circle { fill:#1c2a44; stroke:#345; stroke-width:1.5; }
+  .n-session circle { fill:#1c2436; stroke:#2a3346; }
+  .n-agent circle { stroke-width:1.5; }
+  .n-agent.running circle { fill:#3a2e0c; stroke:#f0b429; }
+  .n-agent.done circle { fill:#123020; stroke:#3fce7c; }
+  .n-agent.blocked circle { fill:#2a1418; stroke:#ff5d6c; }
+  .n-agent.pending circle, .n-agent.unknown circle { fill:#1a2130; stroke:#4a5570; }
+  .pulse { animation:mpulse 1.4s ease-out infinite; transform-origin:center; transform-box:fill-box; }
+  @keyframes mpulse { 0%,100%{ opacity:1 } 50%{ opacity:.35 } }
+
+  /* bubbles layout */
+  .islands { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; }
+  .island { border:1px solid var(--border); border-radius:14px; background:var(--panel); padding:16px; }
+  .island.dim { opacity:.5; }
+  .island .ihead { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  .island .iname { font-weight:700; font-size:15px; }
+  .island .ibadge { margin-left:auto; font-size:11px; color:var(--muted); }
+  .island .ibadge b { color:var(--run); }
+  .bubbles { display:flex; flex-wrap:wrap; gap:8px; }
+  .bub { display:flex; align-items:center; gap:6px; font-size:11px; padding:5px 9px; border-radius:20px; border:1px solid var(--border); cursor:default; }
+  .bub .bd { width:8px; height:8px; border-radius:50%; }
+  .bub.running { background:#2a2410; } .bub.running .bd{ background:var(--run); animation:mpulse 1.4s infinite; }
+  .bub.done { background:#12281c; } .bub.done .bd{ background:var(--done); }
+  .bub.blocked { background:#2a1418; } .bub.blocked .bd{ background:var(--block); }
+  .bub.pending .bd, .bub.unknown .bd { background:var(--todo); }
+  .island .empty-sess { color:#5c6780; font-size:12px; font-style:italic; }
+  .island .sess-row { margin-bottom:12px; }
+  .island .sess-row .sr-title { font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .island .sess-row .sr-title b { color:var(--text); }
   header .meta { margin-left:auto; color:var(--muted); font-size:12px; display:flex; align-items:center; gap:14px; }
   .switch { display:inline-flex; align-items:center; gap:7px; cursor:pointer; user-select:none; font-size:12px; }
   .switch input { display:none; }
@@ -142,6 +204,10 @@
 <header>
   <h1 id="home">Agents Dashboard</h1>
   <span class="crumb" id="crumb"></span>
+  <nav class="nav" id="nav">
+    <a class="navlink" id="navBoard" href="?">Board</a>
+    <a class="navlink" id="navMap" href="?view=map">🧠 Map</a>
+  </nav>
   <div class="meta">
     <label class="switch" id="activeToggleWrap" style="display:none">
       <input type="checkbox" id="activeOnly"><span class="track"></span>active only
@@ -319,12 +385,311 @@ function session(s){
   return box;
 }
 
+/* ---------------- Map view ---------------- */
+let mapLayout = localStorage.getItem('cfa_mapLayout')||'radial';   // radial | bubbles | force
+let mapFilter = localStorage.getItem('cfa_mapFilter')||'active';   // active | all | summary
+let forceTimer = null;
+
+function agentClass(a){ return 'n-agent '+(a.status||'unknown'); }
+function isActiveSession(s){ return s.status==='running'; }
+
+async function renderMap(){
+  document.getElementById('crumb').textContent=' / map';
+  const root=document.getElementById('root');
+  // build toolbar once, keep stage across refreshes to avoid flwinking
+  let stage = document.getElementById('mapStage');
+  if(!stage){
+    root.innerHTML='';
+    const tb=el('div','map-toolbar');
+    const seg=el('div','seg');
+    [['radial','🧠 Radial'],['bubbles','🫧 Bubbles'],['force','🕸 Force']].forEach(([k,label])=>{
+      const b=el('button',mapLayout===k?'on':'',label); b.onclick=()=>{ mapLayout=k; localStorage.setItem('cfa_mapLayout',k); [...seg.children].forEach(c=>c.classList.remove('on')); b.classList.add('on'); stopForce(); drawMap(); };
+      seg.appendChild(b);
+    });
+    tb.appendChild(seg);
+    const fl=el('label','map-filter'); fl.innerHTML='show ';
+    const sel=el('select'); [['active','only active'],['all','everything'],['summary','summary']].forEach(([v,t])=>{const o=el('option',null,t);o.value=v;if(mapFilter===v)o.selected=true;sel.appendChild(o);});
+    sel.onchange=()=>{ mapFilter=sel.value; localStorage.setItem('cfa_mapFilter',mapFilter); drawMap(); };
+    fl.appendChild(sel); tb.appendChild(fl);
+    // fullscreen toggle
+    const fs=el('button','fs-btn','⛶ fullscreen'); fs.title='toggle fullscreen';
+    fs.onclick=()=>toggleMapFullscreen(fs);
+    tb.appendChild(fs);
+    root.appendChild(tb);
+    stage=el('div','map-stage'); stage.id='mapStage'; root.appendChild(stage);
+  }
+  await drawMap();
+}
+
+function toggleMapFullscreen(btn){
+  const stage=document.getElementById('mapStage'); if(!stage) return;
+  if(!document.fullscreenElement){
+    (stage.requestFullscreen ? stage.requestFullscreen() : stage.webkitRequestFullscreen && stage.webkitRequestFullscreen());
+    stage.classList.add('fs');
+  } else {
+    document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen && document.webkitExitFullscreen();
+  }
+}
+document.addEventListener('fullscreenchange',()=>{
+  const stage=document.getElementById('mapStage');
+  if(stage && !document.fullscreenElement){ stage.classList.remove('fs'); drawMap(); }
+  else if(stage){ drawMap(); }   // redraw to fit the new size
+});
+
+async function fetchMap(){
+  const data=await (await fetch('/api/map')).json();
+  let projects=data.projects||[];
+  // apply filter
+  if(mapFilter==='active'){
+    projects = projects.map(p=>({ ...p, sessions:(p.sessions||[]).filter(isActiveSession) }));
+  }
+  document.getElementById('metaText').textContent=projects.length+' project(s)';
+  return projects;
+}
+
+// remembered zoom/pan per stage session, so refreshes don't reset the view
+let mapView = { k:1, x:0, y:0, init:false };
+
+/* Wrap SVG children in a <g> and enable wheel-zoom (to cursor) + drag-pan.
+   Adds zoom +/- /reset controls into the stage. */
+function attachZoomPan(stage, svg){
+  const NS='http://www.w3.org/2000/svg';
+  // move existing children into a viewport group
+  const vp=document.createElementNS(NS,'g');
+  while(svg.firstChild) vp.appendChild(svg.firstChild);
+  svg.appendChild(vp);
+  const apply=()=>vp.setAttribute('transform',`translate(${mapView.x},${mapView.y}) scale(${mapView.k})`);
+  if(!mapView.init){ mapView={k:1,x:0,y:0,init:true}; }
+  apply();
+
+  // convert a client point to svg-user coords (accounts for viewBox scaling)
+  const toSvg=(clientX,clientY)=>{
+    const pt=svg.createSVGPoint(); pt.x=clientX; pt.y=clientY;
+    const m=svg.getScreenCTM(); if(!m) return {x:clientX,y:clientY};
+    const p=pt.matrixTransform(m.inverse()); return {x:p.x,y:p.y};
+  };
+  svg.addEventListener('wheel',(e)=>{
+    e.preventDefault();
+    const before=toSvg(e.clientX,e.clientY);
+    const factor=e.deltaY<0 ? 1.12 : 1/1.12;
+    const nk=Math.max(0.2,Math.min(6,mapView.k*factor));
+    // keep the point under the cursor fixed
+    mapView.x = before.x - (before.x - mapView.x) * (nk/mapView.k);
+    mapView.y = before.y - (before.y - mapView.y) * (nk/mapView.k);
+    mapView.k = nk; apply();
+  },{passive:false});
+  let dragging=false, sx=0, sy=0, ox=0, oy=0;
+  svg.addEventListener('pointerdown',(e)=>{ dragging=true; svg.classList.add('grabbing'); sx=e.clientX; sy=e.clientY; ox=mapView.x; oy=mapView.y; svg.setPointerCapture(e.pointerId); });
+  svg.addEventListener('pointermove',(e)=>{ if(!dragging)return; const m=svg.getScreenCTM(); const s=m?m.a:1; mapView.x=ox+(e.clientX-sx)/s; mapView.y=oy+(e.clientY-sy)/s; apply(); });
+  const end=()=>{ dragging=false; svg.classList.remove('grabbing'); };
+  svg.addEventListener('pointerup',end); svg.addEventListener('pointerleave',end);
+
+  // zoom controls
+  const ctrl=el('div','zoom-ctrl');
+  const mk=(txt,fn)=>{ const b=el('button',null,txt); b.onclick=fn; ctrl.appendChild(b); };
+  const zoomBy=(f)=>{ const r=svg.getBoundingClientRect(); const c=toSvg(r.left+r.width/2,r.top+r.height/2); const nk=Math.max(0.2,Math.min(6,mapView.k*f)); mapView.x=c.x-(c.x-mapView.x)*(nk/mapView.k); mapView.y=c.y-(c.y-mapView.y)*(nk/mapView.k); mapView.k=nk; apply(); };
+  mk('+',()=>zoomBy(1.25)); mk('−',()=>zoomBy(1/1.25)); mk('⤢',()=>{ mapView={k:1,x:0,y:0,init:true}; apply(); });
+  stage.appendChild(ctrl);
+  const hint=el('div','zoom-hint','scroll = zoom · drag = pan'); stage.appendChild(hint);
+}
+
+async function drawMap(){
+  const stage=document.getElementById('mapStage'); if(!stage) return;
+  let projects;
+  try{ projects=await fetchMap(); }catch(e){ stage.innerHTML='<div class="page-empty">Server unreachable.</div>'; return; }
+  if(mapLayout==='bubbles') return drawBubbles(stage,projects);
+  if(mapLayout==='force') return drawForce(stage,projects);
+  return drawRadial(stage,projects);
+}
+
+/* ---- shared tree flatten ---- */
+function mapNodes(projects){
+  // returns {projects:[{p, sessions:[{s, agents:[...]}]}]}
+  return projects.map(p=>({ p, sessions:(p.sessions||[]).map(s=>({ s, agents:(mapFilter==='summary')?[]:(s.agents||[]) })) }));
+}
+
+/* ---- 1) RADIAL (brain) ---- */
+function drawRadial(stage,projects){
+  const tree=mapNodes(projects);
+  if(!tree.length){ stage.innerHTML='<div class="page-empty">Nothing to map. Try the "everything" filter.</div>'; return; }
+  const NS='http://www.w3.org/2000/svg';
+  const cx=0, cy=0; // center at origin; we auto-fit the viewBox afterwards
+  const svg=document.createElementNS(NS,'svg');
+  const edges=document.createElementNS(NS,'g'); const nodes=document.createElementNS(NS,'g');
+  svg.appendChild(edges); svg.appendChild(nodes);
+  // track bounding box of everything drawn (node center ± radius, plus label room)
+  let minX=0,minY=0,maxX=0,maxY=0;
+  const grow=(x,y,pad)=>{ minX=Math.min(minX,x-pad); minY=Math.min(minY,y-pad); maxX=Math.max(maxX,x+pad); maxY=Math.max(maxY,y+pad); };
+  const node=(cls,x,y,r,label,sub,onclick)=>{
+    const g=document.createElementNS(NS,'g'); g.setAttribute('class','mnode '+cls); g.setAttribute('transform',`translate(${x},${y})`);
+    const c=document.createElementNS(NS,'circle'); c.setAttribute('r',r); g.appendChild(c);
+    if(label){ const t=document.createElementNS(NS,'text'); t.setAttribute('text-anchor','middle'); t.setAttribute('dy',r+13); t.textContent=label; g.appendChild(t); }
+    if(sub){ const t=document.createElementNS(NS,'text'); t.setAttribute('class','sub'); t.setAttribute('text-anchor','middle'); t.setAttribute('dy',r+25); t.textContent=sub; g.appendChild(t); }
+    if(onclick){ g.style.cursor='pointer'; g.onclick=onclick; }
+    nodes.appendChild(g);
+    grow(x,y, r + (label?46:6) + (sub?12:0)); // reserve room for labels below the node
+    return {x,y};
+  };
+  const edge=(a,b,hot)=>{ const p=document.createElementNS(NS,'path'); p.setAttribute('class','medge'+(hot?' hot':'')); const mx=(a.x+b.x)/2; p.setAttribute('d',`M${a.x},${a.y} C${mx},${a.y} ${mx},${b.y} ${b.x},${b.y}`); edges.appendChild(p); };
+
+  const center=node('n-center',cx,cy,26,'','',null);
+  const centerT=document.createElementNS(NS,'text'); centerT.setAttribute('text-anchor','middle'); centerT.setAttribute('dy',4); centerT.setAttribute('style','fill:#cfe0ff;font-weight:700;font-size:12px'); centerT.textContent='YOU'; nodes.appendChild(centerT);
+
+  const nP=tree.length;
+  // ring radii scale with how many projects there are (more projects → wider rings so they don't overlap)
+  const baseR = 220 + nP*18;
+  tree.forEach((pn,pi)=>{
+    const ang=(pi/nP)*Math.PI*2 - Math.PI/2;
+    const px=cx+Math.cos(ang)*baseR, py=cy+Math.sin(ang)*baseR;
+    const anyRun=pn.sessions.some(x=>x.s.status==='running');
+    const pNode=node('n-project',px,py,16,pn.p.name.slice(0,22), pn.p.running?pn.p.running+' running':'', ()=>location.search='?project='+encodeURIComponent(pn.p.name));
+    edge(center,pNode,anyRun);
+    const nS=pn.sessions.length||1;
+    // fan sessions outward from the project along the same angle, spread by a small arc
+    const spreadS = Math.min(0.55, 1.4/Math.max(nS,1));
+    pn.sessions.forEach((sn,si)=>{
+      const sAng=ang + (si-(nS-1)/2)*spreadS;
+      const sr=baseR+130;
+      const sx=cx+Math.cos(sAng)*sr, sy=cy+Math.sin(sAng)*sr;
+      const sNode=node('n-session',sx,sy,9,sn.s.issueId,'', ()=>location.search='?project='+encodeURIComponent(pn.p.name));
+      edge(pNode,sNode,sn.s.status==='running');
+      const nA=sn.agents.length||0;
+      const spreadA = Math.min(0.3, 0.9/Math.max(nA,1));
+      sn.agents.forEach((a,ai)=>{
+        const aAng=sAng + (ai-(nA-1)/2)*spreadA;
+        const ar=sr+80;
+        const ax=cx+Math.cos(aAng)*ar, ay=cy+Math.sin(aAng)*ar;
+        node(agentClass(a),ax,ay,6, a.status==='running'?a.name.slice(0,18):'', '', null);
+        if(a.status==='running') nodes.lastChild.classList.add('pulse');
+        edge(sNode,{x:ax,y:ay}, a.status==='running');
+      });
+    });
+  });
+  // auto-fit viewBox to the real content bounds + margin — nothing gets clipped
+  const M=40;
+  const vbX=minX-M, vbY=minY-M, vbW=(maxX-minX)+M*2, vbH=(maxY-minY)+M*2;
+  svg.setAttribute('viewBox',`${vbX} ${vbY} ${vbW} ${vbH}`);
+  svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+  stage.innerHTML=''; stage.appendChild(svg);
+  attachZoomPan(stage,svg);
+}
+
+/* ---- 2) BUBBLES (islands) ---- */
+function drawBubbles(stage,projects){
+  const tree=mapNodes(projects);
+  const wrap=el('div','islands');
+  tree.forEach(pn=>{
+    const island=el('div','island'+(pn.p.running?'':' dim'));
+    const head=el('div','ihead');
+    head.appendChild(el('span','iname',esc(pn.p.name)));
+    const badge=el('span','ibadge', pn.p.running?('<b>'+pn.p.running+'</b> running'):'idle');
+    head.appendChild(badge);
+    island.appendChild(head);
+    if(!pn.sessions.length){ island.appendChild(el('div','empty-sess', mapFilter==='active'?'no active sessions':'no sessions')); }
+    pn.sessions.forEach(sn=>{
+      const row=el('div','sess-row');
+      row.appendChild(el('div','sr-title','<b>'+esc(sn.s.issueId)+'</b> '+esc(sn.s.title||'')+' · '+esc(sn.s.status||'')));
+      if(mapFilter!=='summary'){
+        const bubs=el('div','bubbles');
+        (sn.agents||[]).forEach(a=>{
+          const b=el('div','bub '+(a.status||'unknown'));
+          b.appendChild(el('span','bd'));
+          b.appendChild(el('span',null,esc(a.name)));
+          b.title=(a.archetype||'')+(a.currentStep?(' · '+a.currentStep):'');
+          bubs.appendChild(b);
+        });
+        row.appendChild(bubs);
+      }
+      island.appendChild(row);
+    });
+    island.style.cursor='pointer'; island.onclick=()=>location.search='?project='+encodeURIComponent(pn.p.name);
+    wrap.appendChild(island);
+  });
+  stage.style.minHeight='auto'; stage.style.background='none'; stage.style.border='0';
+  stage.innerHTML=''; stage.appendChild(wrap);
+  if(!tree.length) stage.innerHTML='<div class="page-empty">Nothing to show. Try the "everything" filter.</div>';
+}
+
+/* ---- 3) FORCE graph (light physics) ---- */
+function stopForce(){ if(forceTimer){ cancelAnimationFrame(forceTimer); forceTimer=null; } }
+function drawForce(stage,projects){
+  stage.style.minHeight=''; stage.style.background=''; stage.style.border='';
+  const W=stage.clientWidth||1000, H=Math.max(stage.clientHeight,520);
+  const NS='http://www.w3.org/2000/svg';
+  const tree=mapNodes(projects);
+  // build nodes/links
+  const nodes=[{id:'center',type:'center',label:'YOU',x:W/2,y:H/2,fx:W/2,fy:H/2}];
+  const links=[];
+  const rnd=(i)=>({x:W/2+Math.cos(i)*180+((i*97)%120-60), y:H/2+Math.sin(i)*180+((i*53)%120-60)});
+  let i=0;
+  tree.forEach(pn=>{
+    const pid='p:'+pn.p.name; const pos=rnd(++i);
+    nodes.push({id:pid,type:'project',label:pn.p.name.slice(0,18),x:pos.x,y:pos.y,vx:0,vy:0,data:pn.p});
+    links.push(['center',pid, pn.p.running>0]);
+    pn.sessions.forEach(sn=>{
+      const sid=pid+'/'+sn.s.issueId; const sp=rnd(++i);
+      nodes.push({id:sid,type:'session',label:sn.s.issueId,x:sp.x,y:sp.y,vx:0,vy:0});
+      links.push([pid,sid, sn.s.status==='running']);
+      sn.agents.forEach(a=>{
+        const aid=sid+'/'+a.id; const ap=rnd(++i);
+        nodes.push({id:aid,type:'agent',status:a.status,label:a.status==='running'?a.name.slice(0,16):'',x:ap.x,y:ap.y,vx:0,vy:0});
+        links.push([sid,aid, a.status==='running']);
+      });
+    });
+  });
+  const byId=Object.fromEntries(nodes.map(n=>[n.id,n]));
+  const svg=document.createElementNS(NS,'svg'); svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  const eg=document.createElementNS(NS,'g'), ng=document.createElementNS(NS,'g'); svg.appendChild(eg); svg.appendChild(ng);
+  const R={center:24,project:15,session:8,agent:6};
+  const lines=links.map(([a,b,hot])=>{ const l=document.createElementNS(NS,'line'); l.setAttribute('class','medge'+(hot?' hot':'')); eg.appendChild(l); return {l,a,b}; });
+  const gEls=nodes.map(n=>{
+    const cls = n.type==='agent' ? ('n-agent '+(n.status||'unknown')) : ('n-'+n.type);
+    const g=document.createElementNS(NS,'g'); g.setAttribute('class','mnode '+cls+(n.type==='agent'&&n.status==='running'?' pulse':''));
+    const c=document.createElementNS(NS,'circle'); c.setAttribute('r',R[n.type]); g.appendChild(c);
+    if(n.label){ const t=document.createElementNS(NS,'text'); t.setAttribute('text-anchor','middle'); t.setAttribute('dy',R[n.type]+12); t.textContent=n.label; g.appendChild(t); }
+    if(n.type==='center'){ const t=document.createElementNS(NS,'text');t.setAttribute('text-anchor','middle');t.setAttribute('dy',4);t.setAttribute('style','fill:#cfe0ff;font-weight:700;font-size:11px');t.textContent='YOU';g.appendChild(t); }
+    if(n.type==='project'){ g.style.cursor='pointer'; g.onclick=()=>location.search='?project='+encodeURIComponent(n.data.name); }
+    ng.appendChild(g); return g;
+  });
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  stage.innerHTML=''; stage.appendChild(svg);
+  attachZoomPan(stage,svg);
+  // simple force sim
+  let ticks=0;
+  function step(){
+    ticks++;
+    for(const n of nodes){ if(n.fx!=null) continue; n.vx*=0.85; n.vy*=0.85; }
+    // repulsion
+    for(let a=0;a<nodes.length;a++)for(let b=a+1;b<nodes.length;b++){
+      const na=nodes[a],nb=nodes[b]; let dx=na.x-nb.x,dy=na.y-nb.y; let d2=dx*dx+dy*dy||1; if(d2>40000)continue;
+      const f=1200/d2; const d=Math.sqrt(d2); dx/=d;dy/=d;
+      if(na.fx==null){na.vx+=dx*f;na.vy+=dy*f;} if(nb.fx==null){nb.vx-=dx*f;nb.vy-=dy*f;}
+    }
+    // springs
+    for(const {a,b} of lines){ const na=byId[a],nb=byId[b]; let dx=nb.x-na.x,dy=nb.y-na.y; const d=Math.sqrt(dx*dx+dy*dy)||1; const f=(d-90)*0.01; dx/=d;dy/=d;
+      if(na.fx==null){na.vx+=dx*f;na.vy+=dy*f;} if(nb.fx==null){nb.vx-=dx*f;nb.vy-=dy*f;} }
+    for(const n of nodes){ if(n.fx!=null){n.x=n.fx;n.y=n.fy;continue;} n.x+=n.vx;n.y+=n.vy; n.x=Math.max(20,Math.min(W-20,n.x)); n.y=Math.max(20,Math.min(H-20,n.y)); }
+    nodes.forEach((n,idx)=>gEls[idx].setAttribute('transform',`translate(${n.x},${n.y})`));
+    for(const {l,a,b} of lines){ const na=byId[a],nb=byId[b]; l.setAttribute('x1',na.x);l.setAttribute('y1',na.y);l.setAttribute('x2',nb.x);l.setAttribute('y2',nb.y); }
+    if(ticks<300) forceTimer=requestAnimationFrame(step);
+  }
+  stopForce(); step();
+  if(!tree.length) stage.innerHTML='<div class="page-empty">Nothing to show. Try the "everything" filter.</div>';
+}
+
 /* ---------------- views ---------------- */
 let LAST=null;
 async function render(){
   const project=qs('project');
+  const view=qs('view');
   document.getElementById('home').onclick=()=>{ location.search=''; };
   const toggleWrap=document.getElementById('activeToggleWrap');
+  // nav highlight
+  document.getElementById('navMap').classList.toggle('on', view==='map');
+  document.getElementById('navBoard').classList.toggle('on', view!=='map');
+
+  if(view==='map'){ toggleWrap.style.display='none'; await renderMap(); return; }
+  stopForce();
 
   if(!project){ // ----- landing -----
     toggleWrap.style.display='none';
@@ -368,7 +733,17 @@ async function render(){
 }
 
 document.getElementById('activeOnly').addEventListener('change',e=>{ activeOnly=e.target.checked; localStorage.setItem('cfa_activeOnly',activeOnly?'1':'0'); render(); });
-render(); setInterval(render,1500);
+render();
+setInterval(()=>{
+  // On the Map view, refresh data in place (don't rebuild toolbar / restart force).
+  if(qs('view')==='map'){
+    const stage=document.getElementById('mapStage');
+    if(stage && mapLayout!=='force'){ drawMap(); }   // radial/bubbles: cheap full redraw
+    // force layout: leave the running sim alone; it self-settles and re-renders on layout/filter change
+    return;
+  }
+  render();
+},1600);
 </script>
 </body>
 </html>
