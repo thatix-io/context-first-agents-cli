@@ -87,6 +87,36 @@ async function readJson<T>(file: string): Promise<T | null> {
   }
 }
 
+/**
+ * Derive a human task title from session artifacts (the first `# H1` of refined.md /
+ * prd.md / context.md). Strips the issue-id prefix and common boilerplate suffixes so
+ * the dashboard can show "<ISSUE-ID> · <clean title>". Returns null if nothing usable.
+ */
+async function extractTitle(sessionDir: string, issueId: string): Promise<string | null> {
+  const sources = ['refined.md', 'prd.md', 'context.md', 'architecture.md'];
+  for (const file of sources) {
+    let text: string;
+    try {
+      text = await fs.readFile(path.join(sessionDir, file), 'utf-8');
+    } catch {
+      continue;
+    }
+    const h1 = /^# +([^\n]+)/m.exec(text)?.[1];
+    if (!h1) continue;
+    let t = h1.trim();
+    // strip a leading "<ISSUE-ID> — " / "<ISSUE-ID>: " prefix
+    t = t.replace(new RegExp(`^${issueId} *[—:-] *`, 'i'), '');
+    // strip leading doc-type prefixes like "PRD — " / "PRD - "
+    t = t.replace(/^(PRD|Context|Architecture) *[—:-] */i, '');
+    // strip trailing boilerplate suffix "… Requisitos Refinados" (with — ( - marker)
+    t = t.replace(/[—(-] *Requisitos Refinados\)?$/i, '').trim();
+    // strip a trailing "(<ISSUE-ID>)" if the id was repeated at the end
+    t = t.replace(new RegExp(String.raw` *\(${issueId}\)$`, 'i'), '').trim();
+    if (t) return t;
+  }
+  return null;
+}
+
 /** List session directories (skips _backlog, dotfiles). */
 export async function listSessions(orchestratorDir: string): Promise<string[]> {
   const dir = path.join(orchestratorDir, '.sessions');
@@ -114,11 +144,12 @@ export async function readSession(orchestratorDir: string, issueId: string): Pro
   }
 
   const pipeline = await detectPipeline(sdir);
+  const artifactTitle = await extractTitle(sdir, issueId);
 
   if (state || workers.length) {
     return {
       issueId,
-      title: state?.title,
+      title: state?.title ?? artifactTitle ?? undefined,
       complexity: state?.complexity,
       status: (state?.status as SessionState['status']) ?? deriveStatus(workers),
       createdAt: state?.createdAt,
@@ -133,6 +164,7 @@ export async function readSession(orchestratorDir: string, issueId: string): Pro
   // Fallback: parse execution-plan.md so old sessions still render (attach pipeline too).
   const fb = await parsePlanFallback(sdir, issueId);
   fb.pipeline = pipeline;
+  if (!fb.title && artifactTitle) fb.title = artifactTitle;
   return fb;
 }
 

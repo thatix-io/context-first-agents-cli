@@ -142,7 +142,8 @@ Escribe el estado legible por máquina en `.sessions/<ISSUE-ID>/` (formato en el
 `SESSION-STATE.md` del orquestador). Esto alimenta `context-agents dashboard`.
 
 1. `state.json`: `{ issueId, title, complexity, status:"planned", createdAt, repos, waves }`
-   (`waves` = las olas del Paso 4).
+   (`waves` = las olas del Paso 4; `title` = el título humano de la tarea desde la spec,
+   para que el dashboard muestre "ISSUE-ID · título").
 2. `workers/<id>.json` para cada nodo: `{ id, name, archetype, repository, objective,
    dependsOn, status:"pending", currentStep:null, steps:[], startedAt:null,
    finishedAt:null, verdict:null }` (incluye el `name` descriptivo del Paso 4).

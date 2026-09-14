@@ -142,7 +142,8 @@ Grave o estado legível por máquina em `.sessions/<ISSUE-ID>/` (formato em
 `SESSION-STATE.md` do orquestrador). Isto alimenta o `context-agents dashboard`.
 
 1. `state.json`: `{ issueId, title, complexity, status:"planned", createdAt, repos, waves }`
-   (`waves` = as ondas do Passo 4).
+   (`waves` = as ondas do Passo 4; `title` = o título humano da tarefa vindo da spec, para
+   o dashboard exibir "ISSUE-ID · título").
 2. `workers/<id>.json` para cada nó: `{ id, name, archetype, repository, objective,
    dependsOn, status:"pending", currentStep:null, steps:[], startedAt:null,
    finishedAt:null, verdict:null }` (inclua o `name` descritivo do Passo 4).

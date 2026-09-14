@@ -141,7 +141,8 @@ Write machine-readable state into `.sessions/<ISSUE-ID>/` (format in the orchest
 `SESSION-STATE.md`). This feeds `context-agents dashboard`.
 
 1. `state.json`: `{ issueId, title, complexity, status:"planned", createdAt, repos, waves }`
-   (`waves` = the waves from Step 4).
+   (`waves` = the waves from Step 4; `title` = the human task title from the spec, so the
+   dashboard shows "ISSUE-ID · title").
 2. `workers/<id>.json` for each node: `{ id, name, archetype, repository, objective,
    dependsOn, status:"pending", currentStep:null, steps:[], startedAt:null,
    finishedAt:null, verdict:null }` (include the descriptive `name` from Step 4).

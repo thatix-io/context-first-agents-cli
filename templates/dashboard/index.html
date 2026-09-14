@@ -49,7 +49,8 @@
   .session .caret { transition:.2s; color:var(--muted); font-size:12px; }
   .session.collapsed .caret { transform:rotate(-90deg); }
   .session .id { font-weight:700; font-size:15px; }
-  .session .title { color:var(--muted); }
+  .session .sep { color:#4a5570; }
+  .session .title { color:var(--text); font-size:14px; }
   .session .spacer { flex:1; }
   .pill { font-size:11px; font-weight:600; padding:3px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:.03em; }
   .pill.simple{ background:#1c3a2a; color:#6ee7a0; } .pill.medium{ background:#3a331c; color:#f0d264; } .pill.complex{ background:#3a1c22; color:#ff98a3; }
@@ -242,7 +243,7 @@ function session(s){
   const bar = el('div','bar');
   bar.appendChild(el('span','caret','▾'));
   bar.appendChild(el('span','id', esc(s.issueId)));
-  if(s.title) bar.appendChild(el('span','title', esc(s.title)));
+  if(s.title){ bar.appendChild(el('span','sep','·')); bar.appendChild(el('span','title', esc(s.title))); }
   bar.appendChild(el('span','spacer'));
   if(s.fromPlanFallback) bar.appendChild(el('span','idle','planned view'));
   if(isLive) bar.appendChild(el('span','live','<i></i>LIVE · '+running+' working'));
