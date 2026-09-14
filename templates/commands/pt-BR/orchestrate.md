@@ -154,6 +154,8 @@ Grave o estado legível por máquina em `.sessions/<ISSUE-ID>/` (formato em
 2. `workers/<id>.json` para cada nó: `{ id, name, archetype, repository, objective,
    dependsOn, status:"pending", currentStep:null, steps:[], startedAt:null,
    finishedAt:null, verdict:null }` (inclua o `name` descritivo do Passo 4).
+3. **Mova a task no gerenciador** — gatilho `work_started`: siga `agents/TASK-STATUS.md`
+   (best-effort; se não houver task manager, ignore).
 
 Mantenha escritas pequenas e frequentes — o dashboard faz polling desses arquivos.
 
@@ -204,6 +206,9 @@ git -C "<path-do-worktree>" rev-list --count "HEAD..origin/<mainBranch>"
   repo que ficou em lote/adiado.
 - Se um `reviewer` ou `conflict-resolver` retornou achados bloqueantes, NÃO siga para PR —
   mostre-os e pergunte ao usuário como proceder.
+- **Mova a task no gerenciador** (siga `agents/TASK-STATUS.md`):
+  - gatilho `blocked` se houver achados bloqueantes;
+  - gatilho `done` quando tudo passou e a sessão foi concluída.
 
 ## Escalação
 

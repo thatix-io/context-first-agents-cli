@@ -275,6 +275,7 @@ behave like `/orchestrate`: **reopen the session and spawn corrective agents**.
    - In `.sessions/<ISSUE-ID>/state.json`, set `status:"running"` and refresh `updatedAt`.
      (If missing — old-flow session — create a minimal one:
      `{ issueId, title, status:"running", createdAt, updatedAt, waves:[] }`.)
+   - **Move the task** — trigger `reopened`: follow `agents/TASK-STATUS.md`.
 2. 🧩 **Build a small fix graph** — one worker per problem/impacted repo, same shape as
    `/orchestrate` (archetype `implementer` to fix, `conflict-resolver` for merge conflicts,
    `tester` to revalidate). For each, create `.sessions/<ISSUE-ID>/workers/<id>.json` with

@@ -102,6 +102,9 @@ gh pr create --title "[ISSUE-ID] Título de la Feature" \
   --base main
 ```
 
+**Tras abrir la(s) PR(s)**, mueve la tarea — disparador `in_review`: sigue
+`agents/TASK-STATUS.md` (usa el estado que mapeaste en `ai.properties.md`; omite si no hay).
+
 **Plantilla de Descripción del PR**:
 
 ```markdown
@@ -228,6 +231,7 @@ correctivos** — no corrijas ad-hoc.
 
 1. 🔴 **Reabre la sesión como ACTIVA**: en `.sessions/<ISSUE-ID>/state.json` define
    `status:"running"` y actualiza `updatedAt` (crea un `state.json` mínimo si no existe).
+   **Mueve la tarea** — disparador `reopened`: sigue `agents/TASK-STATUS.md`.
 2. 🧩 **Un worker por comentario/ajuste** en `.sessions/<ISSUE-ID>/workers/<id>.json`, con
    un `name` descriptivo (ej.: `fix:pr-feedback-back`), `status:"pending"`, `steps:[]`.
 3. 🤖 **Spawnea los agentes (Task tool)** en olas como `/orchestrate`, actualizando

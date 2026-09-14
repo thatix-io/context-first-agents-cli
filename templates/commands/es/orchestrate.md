@@ -154,6 +154,8 @@ Escribe el estado legible por máquina en `.sessions/<ISSUE-ID>/` (formato en el
 2. `workers/<id>.json` para cada nodo: `{ id, name, archetype, repository, objective,
    dependsOn, status:"pending", currentStep:null, steps:[], startedAt:null,
    finishedAt:null, verdict:null }` (incluye el `name` descriptivo del Paso 4).
+3. **Mueve la tarea en el tracker** — disparador `work_started`: sigue `agents/TASK-STATUS.md`
+   (best-effort; omite si no hay task manager).
 
 Mantén escrituras pequeñas y frecuentes — el dashboard hace polling de estos archivos.
 
@@ -204,6 +206,9 @@ git -C "<ruta-del-worktree>" rev-list --count "HEAD..origin/<mainBranch>"
   repo que quedó en lote/diferido.
 - Si un `reviewer` o `conflict-resolver` retornó hallazgos bloqueantes, NO sigas a PR —
   muéstralos y pregunta al usuario cómo proceder.
+- **Mueve la tarea en el tracker** (sigue `agents/TASK-STATUS.md`):
+  - disparador `blocked` si hay hallazgos bloqueantes;
+  - disparador `done` cuando todo pasó y la sesión está completa.
 
 ## Escalación
 

@@ -309,6 +309,7 @@ forma ad-hoc, compórtate como `/orchestrate`: **reabre la sesión y spawnea age
    - En `.sessions/<ISSUE-ID>/state.json`, define `status:"running"` y actualiza `updatedAt`.
      (Si no existe — sesión del flujo antiguo — crea uno mínimo:
      `{ issueId, title, status:"running", createdAt, updatedAt, waves:[] }`.)
+   - **Mueve la tarea** — disparador `reopened`: sigue `agents/TASK-STATUS.md`.
 2. 🧩 **Arma un mini-grafo de corrección** — un worker por problema/repo impactado, con el
    mismo formato de `/orchestrate` (arquetipo `implementer` para corregir,
    `conflict-resolver` para conflictos de merge, `tester` para revalidar). Para cada uno crea

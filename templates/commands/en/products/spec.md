@@ -232,7 +232,8 @@ Justification: [Why these are deferred]
 - Use the appropriate MCP to update the issue with the PRD:
   - Add the complete PRD as a comment on the issue
   - Or attach as a file (if the task manager supports it)
-  - Update status/labels (e.g., "spec-ready", "ready-for-dev")
+  - **Move the task** — trigger `spec_ready`: follow `agents/TASK-STATUS.md` (uses the
+    status YOU mapped in `ai.properties.md`, not a fixed name; skips if no task manager).
 - Inform the user: "✅ PRD added to issue [ID]"
 
 **FALLBACK: Create .md file only if MCP fails**

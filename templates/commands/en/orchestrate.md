@@ -153,6 +153,8 @@ Write machine-readable state into `.sessions/<ISSUE-ID>/` (format in the orchest
 2. `workers/<id>.json` for each node: `{ id, name, archetype, repository, objective,
    dependsOn, status:"pending", currentStep:null, steps:[], startedAt:null,
    finishedAt:null, verdict:null }` (include the descriptive `name` from Step 4).
+3. **Move the task in the tracker** — trigger `work_started`: follow `agents/TASK-STATUS.md`
+   (best-effort; skip if there's no task manager).
 
 Keep writes small and frequent — the dashboard polls these files.
 
@@ -204,6 +206,9 @@ git -C "<worktree-path>" rev-list --count "HEAD..origin/<mainBranch>"
   and any repo that was batched/deferred.
 - If a `reviewer` or `conflict-resolver` returned blocking findings, do NOT proceed to PR —
   surface them and ask the user how to proceed.
+- **Move the task in the tracker** (follow `agents/TASK-STATUS.md`):
+  - trigger `blocked` if there are blocking findings;
+  - trigger `done` when everything passed and the session is complete.
 
 ## Escalation
 

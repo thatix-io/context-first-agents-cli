@@ -265,7 +265,8 @@ Justificación: [Por qué quedan para después]
 - Use el MCP apropiado para actualizar la issue con el PRD:
   - Añada el PRD completo como comentario en la issue
   - O adjunte como archivo (si el gestor de tareas lo soporta)
-  - Actualice estado/etiquetas (ej: "spec-ready", "ready-for-dev")
+  - **Mueve la tarea** — disparador `spec_ready`: sigue `agents/TASK-STATUS.md` (usa el
+    estado que TÚ mapeaste en `ai.properties.md`, no un nombre fijo; omite si no hay tracker).
 - Informe al usuario: "✅ PRD añadido a la issue [ID]"
 
 **FALLBACK: Crear archivo .md sólo si MCP falla**

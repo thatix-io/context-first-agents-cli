@@ -310,6 +310,7 @@ agentes corretivos**.
    - Em `.sessions/<ISSUE-ID>/state.json`, defina `status:"running"` e atualize `updatedAt`.
      (Se o arquivo não existir — sessão do fluxo antigo — crie um mínimo:
      `{ issueId, title, status:"running", createdAt, updatedAt, waves:[] }`.)
+   - **Mova a task** — gatilho `reopened`: siga `agents/TASK-STATUS.md`.
 2. 🧩 **Monte um mini-grafo de correção** — um worker por problema/repo impactado, no mesmo
    formato do `/orchestrate` (arquétipos `implementer` para corrigir, `conflict-resolver`
    para conflitos de merge, `tester` para revalidar). Para cada worker crie
