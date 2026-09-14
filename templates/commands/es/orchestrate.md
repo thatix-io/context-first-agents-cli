@@ -109,24 +109,31 @@ Antes de spawnear cualquier agente, crea un **git worktree aislado por repositor
 impactado** (sólo los del grafo), para que cada implementer tenga dónde escribir sin tocar
 el repo principal. Usa `base_path` (de `ai.properties.md`) y el `<ISSUE-ID>`.
 
-Para cada repositorio impactado `<repo>`:
+Para cada repositorio impactado `<repo>` (usa el `mainBranch` del manifiesto, por defecto `main`):
 
 1. Si `.sessions/<ISSUE-ID>/<repo>/` ya existe, **sáltalo** (worktree listo).
-2. Chequea si la branch `feature/<ISSUE-ID>` ya existe en el repo:
+2. **Actualiza la base**: trae el estado más reciente del remoto para que el worktree
+   nazca de código actualizado (no de la main local, que puede estar vieja):
+   ```bash
+   git -C "{base_path}/<repo>" fetch origin "<mainBranch>" --quiet
+   ```
+3. Chequea si la branch `feature/<ISSUE-ID>` ya existe en el repo:
    ```bash
    git -C "{base_path}/<repo>" rev-parse --verify --quiet "feature/<ISSUE-ID>"
    ```
-3. Crea el worktree desde el repo principal:
-   - si la branch **no** existe (créala en el worktree):
+4. Crea el worktree:
+   - si la branch **no** existe — créala **desde `origin/<mainBranch>` actualizada**:
      ```bash
      git -C "{base_path}/<repo>" worktree add -b "feature/<ISSUE-ID>" \
-         "$(pwd)/.sessions/<ISSUE-ID>/<repo>"
+         "$(pwd)/.sessions/<ISSUE-ID>/<repo>" "origin/<mainBranch>"
      ```
    - si la branch **ya** existe (reutilízala):
      ```bash
      git -C "{base_path}/<repo>" worktree add \
          "$(pwd)/.sessions/<ISSUE-ID>/<repo>" "feature/<ISSUE-ID>"
      ```
+   Si el `fetch` falla (sin remoto/offline), avisa y cae al estado local
+   (`worktree add -b feature/<ISSUE-ID> <path>` sin `origin/<mainBranch>`).
 
 Reglas:
 - **Nunca** hagas `checkout` en el repo principal (`{base_path}/<repo>`) — el worktree aísla todo.
@@ -172,14 +179,31 @@ como marco de cada subagente, rellenadas con objetivo, repositorio y contrato.
 Cada subagente es **efímero**: hace su trabajo acotado, retorna el reporte, y su contexto
 se descarta. El Orquestador sólo guarda los reportes.
 
+## Paso 6b — Reconciliar con la base (conflictos) antes del PR
+
+Mientras los agentes trabajaban, `origin/<mainBranch>` pudo avanzar. Para cada repo
+impactado, verifica si el worktree divergió de la base:
+
+```bash
+git -C "<ruta-del-worktree>" fetch origin "<mainBranch>" --quiet
+git -C "<ruta-del-worktree>" rev-list --count "HEAD..origin/<mainBranch>"
+```
+
+- Si el resultado es `0` (la base no avanzó), **sáltalo** — no hay nada que reconciliar.
+- Si es `> 0`, **spawnea un agente `conflict-resolver`** (arquetipo en
+  `agents/conflict-resolver.md`) para ese repo. Rebasa sobre `origin/<mainBranch>`,
+  resuelve conflictos guiado por la spec, corre los tests y **SE DETIENE para tu aprobación**.
+  Registra su estado en `workers/` como los demás.
+- Si retorna `NEEDS-HUMAN`, **no** sigas a PR — muestra los conflictos y pregunta.
+
 ## Paso 7 — Integrar y reportar
 
 - Persiste artefactos en `.sessions/<ISSUE-ID>/`:
   `execution-plan.md` (el DAG) y `workers/<agent-id>.md` (contrato + retorno de cada uno).
 - Resume: qué cambió por repo, evidencias, tests corridos, preguntas abiertas y cualquier
   repo que quedó en lote/diferido.
-- Si un `reviewer` retornó hallazgos bloqueantes, NO sigas a PR — muéstralos y pregunta al
-  usuario cómo proceder.
+- Si un `reviewer` o `conflict-resolver` retornó hallazgos bloqueantes, NO sigas a PR —
+  muéstralos y pregunta al usuario cómo proceder.
 
 ## Escalación
 

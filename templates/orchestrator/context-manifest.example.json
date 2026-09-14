@@ -36,7 +36,7 @@
     }
   ],
   "orchestration": {
-    "archetypes": ["planner", "researcher", "implementer", "reviewer", "tester", "integrator"],
+    "archetypes": ["planner", "researcher", "implementer", "reviewer", "tester", "integrator", "conflict-resolver"],
     "riskSignals": ["migration", "payment", "security", "breaking change", "contract", "webhook", "auth"],
     "parallelism": { "maxWorkers": 8, "maxPerRepository": 2 },
     "contextPolicy": "select-do-not-dump",

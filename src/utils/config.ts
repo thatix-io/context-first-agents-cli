@@ -80,6 +80,7 @@ export const DEFAULT_ARCHETYPES = [
   'reviewer',
   'tester',
   'integrator',
+  'conflict-resolver',
 ];
 
 export const DEFAULT_RISK_SIGNALS = [

@@ -108,24 +108,31 @@ Before spawning any agent, create an **isolated git worktree per impacted reposi
 (only the ones in the graph), so each implementer has a place to write without touching
 the main repo. Use `base_path` (from `ai.properties.md`) and the `<ISSUE-ID>`.
 
-For each impacted repository `<repo>`:
+For each impacted repository `<repo>` (use the manifest's `mainBranch`, default `main`):
 
 1. If `.sessions/<ISSUE-ID>/<repo>/` already exists, **skip** (worktree ready).
-2. Check whether branch `feature/<ISSUE-ID>` already exists in the repo:
+2. **Update the base**: fetch the latest remote state so the worktree starts from
+   up-to-date code (not the local main, which may be stale):
+   ```bash
+   git -C "{base_path}/<repo>" fetch origin "<mainBranch>" --quiet
+   ```
+3. Check whether branch `feature/<ISSUE-ID>` already exists in the repo:
    ```bash
    git -C "{base_path}/<repo>" rev-parse --verify --quiet "feature/<ISSUE-ID>"
    ```
-3. Create the worktree from the main repo:
-   - if the branch does **not** exist (create it in the worktree):
+4. Create the worktree:
+   - if the branch does **not** exist — create it **from the updated `origin/<mainBranch>`**:
      ```bash
      git -C "{base_path}/<repo>" worktree add -b "feature/<ISSUE-ID>" \
-         "$(pwd)/.sessions/<ISSUE-ID>/<repo>"
+         "$(pwd)/.sessions/<ISSUE-ID>/<repo>" "origin/<mainBranch>"
      ```
    - if the branch **already** exists (reuse it):
      ```bash
      git -C "{base_path}/<repo>" worktree add \
          "$(pwd)/.sessions/<ISSUE-ID>/<repo>" "feature/<ISSUE-ID>"
      ```
+   If the `fetch` fails (no remote/offline), warn and fall back to local state
+   (`worktree add -b feature/<ISSUE-ID> <path>` without `origin/<mainBranch>`).
 
 Rules:
 - **Never** `checkout` in the main repo (`{base_path}/<repo>`) — the worktree isolates everything.
@@ -172,14 +179,31 @@ repository, and context contract.
 Each subagent is **ephemeral**: it does its bounded job, returns its report, and its
 context is discarded. The Orchestrator only keeps the reports.
 
+## Step 6b — Reconcile with the base (conflicts) before PR
+
+While the agents worked, `origin/<mainBranch>` may have advanced. For each impacted repo,
+check whether the worktree diverged from the base:
+
+```bash
+git -C "<worktree-path>" fetch origin "<mainBranch>" --quiet
+git -C "<worktree-path>" rev-list --count "HEAD..origin/<mainBranch>"
+```
+
+- If the result is `0` (base didn't advance), **skip** — nothing to reconcile.
+- If `> 0`, **spawn a `conflict-resolver` agent** (archetype in
+  `agents/conflict-resolver.md`) for that repo. It rebases onto `origin/<mainBranch>`,
+  resolves conflicts guided by the spec, runs the tests, and **STOPS for your approval**.
+  Record its status under `workers/` like the others.
+- If it returns `NEEDS-HUMAN`, do **not** proceed to PR — show the conflicts and ask.
+
 ## Step 7 — Integrate and report
 
 - Persist artifacts under `.sessions/<ISSUE-ID>/`:
   `execution-plan.md` (the DAG), and `workers/<agent-id>.md` (each contract + return).
 - Summarize: what changed per repo, evidence, tests run, unresolved questions,
   and any repo that was batched/deferred.
-- If a `reviewer` returned blocking findings, do NOT proceed to PR — surface them and
-  ask the user how to proceed.
+- If a `reviewer` or `conflict-resolver` returned blocking findings, do NOT proceed to PR —
+  surface them and ask the user how to proceed.
 
 ## Escalation
 
