@@ -53,20 +53,24 @@ name from YOUR board. Commands move the task via MCP at each trigger. Rules:
 - A value is normally the **target status** (e.g. `In Progress`). If your Jira workflow
   requires a **transition name** instead, prefix it with `transition:` (e.g.
   `transition:Start Progress`).
+- **Azure DevOps**: values are **board COLUMN names** (moved via `System.BoardColumn`),
+  because Azure columns can share the same state — see `agents/TASK-STATUS.md`.
 - Optionally post a comment on the task at a trigger with `comment_<trigger>`.
 
 ```
-# ── move the task to this status at each trigger ──
-status_spec_ready:    # after /spec is approved         (e.g. Ready for Dev)
-status_work_started:  # when /orchestrate starts work    (e.g. In Progress)
-status_in_review:     # when /pr opens the pull request  (e.g. In Review)
-status_reopened:      # when /pre-pr or /pr reopen to fix (e.g. In Progress)
-status_blocked:       # when a reviewer blocks           (e.g. Blocked)
+# ── move the task to this status/column at each trigger ──
+status_spec_ready:    # after /spec is approved          (e.g. Ready for Dev)
+status_work_started:  # when /orchestrate starts work     (e.g. In Progress / Doing)
+status_in_review:     # when /pr opens the pull request   (e.g. In Review / Code Review)
+status_reopened:      # when /pre-pr/pr/merge reopen to fix(e.g. In Progress / Doing)
+status_blocked:       # when a reviewer blocks            (e.g. Blocked)
+status_in_test:       # when /merge merges (validation)   (e.g. Test)
 status_done:          # when the task is finished/approved(e.g. Done)
 
 # ── optional comments posted at a trigger (leave blank to skip) ──
 # comment_work_started: 🤖 Orchestration started — see the agents dashboard.
 # comment_in_review:    ✅ PR opened.
+# comment_in_test:      🚀 Merged — validating.
 # comment_done:         🎉 Done and merged.
 ```
 

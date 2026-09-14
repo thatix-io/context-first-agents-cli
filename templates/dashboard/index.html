@@ -484,13 +484,15 @@ function attachZoomPan(stage, svg){
   const end=()=>{ dragging=false; svg.classList.remove('grabbing'); };
   svg.addEventListener('pointerup',end); svg.addEventListener('pointerleave',end);
 
-  // zoom controls
-  const ctrl=el('div','zoom-ctrl');
-  const mk=(txt,fn)=>{ const b=el('button',null,txt); b.onclick=fn; ctrl.appendChild(b); };
-  const zoomBy=(f)=>{ const r=svg.getBoundingClientRect(); const c=toSvg(r.left+r.width/2,r.top+r.height/2); const nk=Math.max(0.2,Math.min(6,mapView.k*f)); mapView.x=c.x-(c.x-mapView.x)*(nk/mapView.k); mapView.y=c.y-(c.y-mapView.y)*(nk/mapView.k); mapView.k=nk; apply(); };
-  mk('+',()=>zoomBy(1.25)); mk('−',()=>zoomBy(1/1.25)); mk('⤢',()=>{ mapView={k:1,x:0,y:0,init:true}; apply(); });
-  stage.appendChild(ctrl);
-  const hint=el('div','zoom-hint','scroll = zoom · drag = pan'); stage.appendChild(hint);
+  // zoom controls — add only once per stage (avoid piling up on every refresh)
+  if(!stage.querySelector('.zoom-ctrl')){
+    const ctrl=el('div','zoom-ctrl');
+    const mk=(txt,fn)=>{ const b=el('button',null,txt); b.onclick=fn; ctrl.appendChild(b); };
+    const zoomBy=(f)=>{ const sv=stage.querySelector('svg'); if(!sv)return; const r=sv.getBoundingClientRect(); const c=toSvg(r.left+r.width/2,r.top+r.height/2); const nk=Math.max(0.2,Math.min(6,mapView.k*f)); mapView.x=c.x-(c.x-mapView.x)*(nk/mapView.k); mapView.y=c.y-(c.y-mapView.y)*(nk/mapView.k); mapView.k=nk; const g=stage.querySelector('svg>g'); if(g) g.setAttribute('transform',`translate(${mapView.x},${mapView.y}) scale(${mapView.k})`); };
+    mk('+',()=>zoomBy(1.25)); mk('−',()=>zoomBy(1/1.25)); mk('⤢',()=>{ mapView={k:1,x:0,y:0,init:true}; const g=stage.querySelector('svg>g'); if(g) g.setAttribute('transform','translate(0,0) scale(1)'); });
+    stage.appendChild(ctrl);
+    stage.appendChild(el('div','zoom-hint','scroll = zoom · drag = pan'));
+  }
 }
 
 async function drawMap(){
@@ -612,7 +614,19 @@ function drawBubbles(stage,projects){
 
 /* ---- 3) FORCE graph (light physics) ---- */
 function stopForce(){ if(forceTimer){ cancelAnimationFrame(forceTimer); forceTimer=null; } }
+let forceState=null;   // {sig, gEls:{id:g}, nodes}
+function forceSig(projects){
+  return projects.map(p=>p.name+':'+(p.sessions||[]).map(s=>s.issueId+'#'+(s.agents||[]).map(a=>a.id+'='+a.status).join(',')).join('|')).join(';');
+}
 function drawForce(stage,projects){
+  // Live update without rebuilding: if the graph structure+statuses are unchanged, do
+  // nothing; if only statuses changed, update classes/labels in place (no sim restart).
+  const sig=forceSig(projects);
+  if(forceState && stage.querySelector('svg') && forceState.stage===stage){
+    if(forceState.sig===sig) return;                 // nothing changed
+    // structure may be same but statuses changed → refresh node visuals in place
+    if(forceState.sameStructure(projects)){ forceState.refresh(projects,sig); return; }
+  }
   stage.style.minHeight=''; stage.style.background=''; stage.style.border='';
   const W=stage.clientWidth||1000, H=Math.max(stage.clientHeight,520);
   const NS='http://www.w3.org/2000/svg';
@@ -674,7 +688,33 @@ function drawForce(stage,projects){
     if(ticks<300) forceTimer=requestAnimationFrame(step);
   }
   stopForce(); step();
-  if(!tree.length) stage.innerHTML='<div class="page-empty">Nothing to show. Try the "everything" filter.</div>';
+  if(!tree.length){ stage.innerHTML='<div class="page-empty">Nothing to show. Try the "everything" filter.</div>'; forceState=null; return; }
+
+  // capture state for in-place live updates on the next refresh
+  const gById=Object.fromEntries(nodes.map((n,idx)=>[n.id,gEls[idx]]));
+  const hotLines=lines;   // {l,a,b}
+  forceState={
+    stage, sig,
+    structKey: (ps)=>ps.map(p=>'p:'+p.name+'>'+(p.sessions||[]).map(s=>s.issueId+'>'+(s.agents||[]).map(a=>a.id).join('.')).join('|')).join(';'),
+    _sk: null,
+    sameStructure(ps){ if(this._sk==null) this._sk=this.structKey(projects); return this.structKey(ps)===this._sk; },
+    refresh(ps,newSig){
+      // update agent node classes/labels + edge hot state without touching positions
+      for(const p of ps) for(const s of (p.sessions||[])){
+        const sEdgeHot=s.status==='running';
+        const sg=gById['p:'+p.name+'/'+s.issueId];
+        for(const a of (s.agents||[])){
+          const g=gById['p:'+p.name+'/'+s.issueId+'/'+a.id]; if(!g) continue;
+          g.setAttribute('class','mnode n-agent '+(a.status||'unknown')+(a.status==='running'?' pulse':''));
+          let t=g.querySelector('text'); const lbl=a.status==='running'?a.name.slice(0,16):'';
+          if(lbl && !t){ t=document.createElementNS('http://www.w3.org/2000/svg','text'); t.setAttribute('text-anchor','middle'); t.setAttribute('dy',18); g.appendChild(t); }
+          if(t) t.textContent=lbl;
+        }
+      }
+      for(const ln of hotLines){ const src=byId[ln.a], dst=byId[ln.b]; /* keep */ }
+      this.sig=newSig;
+    }
+  };
 }
 
 /* ---------------- views ---------------- */
@@ -741,11 +781,10 @@ async function render(){
 document.getElementById('activeOnly').addEventListener('change',e=>{ activeOnly=e.target.checked; localStorage.setItem('cfa_activeOnly',activeOnly?'1':'0'); render(); });
 render();
 setInterval(()=>{
-  // On the Map view, refresh data in place (don't rebuild toolbar / restart force).
+  // On the Map view, refresh data in place (toolbar/stage stay; zoom is preserved).
   if(qs('view')==='map'){
     const stage=document.getElementById('mapStage');
-    if(stage && mapLayout!=='force'){ drawMap(); }   // radial/bubbles: cheap full redraw
-    // force layout: leave the running sim alone; it self-settles and re-renders on layout/filter change
+    if(stage) drawMap();   // re-fetch + redraw for all layouts, keeping current zoom/pan
     return;
   }
   render();

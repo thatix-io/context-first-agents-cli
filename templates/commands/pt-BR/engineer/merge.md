@@ -72,6 +72,10 @@ plataforma de PR**; se não houver PR/CLI, cair para merge local.
   git -C "{base_path}/<repo>" push origin "<mainBranch>"
   ```
 
+**Assim que o merge concluir**, **mova a task** — gatilho `in_test` (siga
+`agents/TASK-STATUS.md`). Use isto quando o projeto valida pós-merge (ex.: coluna "Test"
+no board); se não houver essa etapa, o `status_in_test` fica em branco e nada é movido.
+
 ## Passo 6 — Atualizar o base_repo e concluir
 - Atualize o repo principal de cada repo mergeado:
   ```bash

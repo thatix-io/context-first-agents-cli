@@ -72,6 +72,10 @@ la plataforma de PR**; si no hay PR/CLI, cae a merge local.
   git -C "{base_path}/<repo>" push origin "<mainBranch>"
   ```
 
+**En cuanto el merge concluya**, **mueve la tarea** — disparador `in_test` (sigue
+`agents/TASK-STATUS.md`). Úsalo cuando el proyecto valida post-merge (ej.: columna "Test"
+en el board); si no hay ese paso, `status_in_test` queda en blanco y nada se mueve.
+
 ## Paso 6 — Actualizar el base_repo y concluir
 - Actualiza el checkout main de cada repo mergeado:
   ```bash
