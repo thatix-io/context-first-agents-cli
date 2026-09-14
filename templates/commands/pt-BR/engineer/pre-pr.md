@@ -299,13 +299,32 @@ Crie `./.sessions/<ISSUE-ID>/pr-description.md`:
 - [Ponto de atenção 2]
 ```
 
-## 🚨 Problemas Encontrados
+## 🚨 Problemas Encontrados → correção via agentes (mini-orquestração)
 
-Se alguma validação falhar:
-1. 🛑 **PARE** o processo de criação de PR
-2. 📝 **DOCUMENTE** o problema
-3. 🔧 **CORRIJA** o problema
-4. 🔄 **EXECUTE** `/pre-pr` novamente
+Se alguma validação falhar (testes vermelhos, conflito, lint, quebra de contrato, achado
+de segurança), **NÃO** marque a tarefa como concluída e **NÃO** siga para o PR. Em vez de
+corrigir de forma ad-hoc, comporte-se como o `/orchestrate`: **reabra a sessão e spawne
+agentes corretivos**.
+
+1. 🔴 **Reabra a sessão como ATIVA** (para o dashboard mostrar que há trabalho em curso):
+   - Em `.sessions/<ISSUE-ID>/state.json`, defina `status:"running"` e atualize `updatedAt`.
+     (Se o arquivo não existir — sessão do fluxo antigo — crie um mínimo:
+     `{ issueId, title, status:"running", createdAt, updatedAt, waves:[] }`.)
+2. 🧩 **Monte um mini-grafo de correção** — um worker por problema/repo impactado, no mesmo
+   formato do `/orchestrate` (arquétipos `implementer` para corrigir, `conflict-resolver`
+   para conflitos de merge, `tester` para revalidar). Para cada worker crie
+   `.sessions/<ISSUE-ID>/workers/<id>.json` com um `name` descritivo do conserto
+   (ex.: `fix:back-tests`, `fix:front-contract`), `status:"pending"`, `steps:[]`.
+3. 🤖 **Spawne os agentes (Task tool)** em ondas, exatamente como o `/orchestrate`:
+   atualize `status`/`currentStep`/`steps[]` de cada worker enquanto trabalham, dentro do
+   worktree da sessão (nunca no repo principal). Cada agente corrige seu escopo e roda os testes.
+4. ✅ **Só então revalide** (`/pre-pr` de novo): rode a validação completa. Se passar,
+   marque os workers como `done`, defina `state.json.status:"done"` e **agora sim** siga
+   para o PR. Se ainda falhar, mantenha `running` e repita — a tarefa permanece ATIVA no
+   dashboard até estar realmente resolvida.
+
+> Regra de ouro: **enquanto houver conserto pendente, `status` NUNCA é `done`.** A tarefa
+> só sai de "ativo" quando tudo passou.
 
 ## 📊 Relatório de Validação
 

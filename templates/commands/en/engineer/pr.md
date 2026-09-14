@@ -186,9 +186,26 @@ Notify the team about the PRs:
 
 ---
 
+## 🚨 Review comments / PR issues → fix via agents
+
+If the PR review (or PR CI) flags something to change, do **NOT** treat the task as done.
+Behave like `/orchestrate`: **reopen the session and spawn corrective agents** — don't fix
+ad-hoc.
+
+1. 🔴 **Reopen the session as ACTIVE**: in `.sessions/<ISSUE-ID>/state.json` set
+   `status:"running"` and refresh `updatedAt` (create a minimal `state.json` if missing).
+2. 🧩 **One worker per comment/adjustment** in `.sessions/<ISSUE-ID>/workers/<id>.json`,
+   with a descriptive `name` (e.g. `fix:pr-feedback-back`), `status:"pending"`, `steps:[]`.
+3. 🤖 **Spawn the agents (Task tool)** in waves like `/orchestrate`, updating
+   `status`/`currentStep`/`steps[]` in the session worktree; each applies the change, runs
+   tests, and commits.
+4. ✅ **Only then** mark the workers `done`, set `state.json.status:"done"`, and respond to
+   the PR comments. **While any adjustment is pending, `status` is NEVER `done`** — the task
+   stays ACTIVE on the dashboard until everything is resolved and approved.
+
 ## 🎯 Next Steps
 
 1. Await PR reviews
-2. Respond to comments and make adjustments
+2. Respond to comments and make adjustments (via the agent flow above)
 3. After approval, merge in the recommended order
-4. Run `context-cli feature:end <ISSUE-ID>` to clean the workspace
+4. Clean up the session workspace when done

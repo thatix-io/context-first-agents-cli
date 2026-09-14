@@ -220,9 +220,26 @@ Notifique o time sobre os PRs:
 
 ---
 
+## 🚨 Comentários de revisão / problemas na PR → correção via agentes
+
+Se a revisão da PR (ou o CI da PR) apontar algo que precisa mudar, **NÃO** trate a tarefa
+como concluída. Comporte-se como o `/orchestrate`: **reabra a sessão e spawne agentes
+corretivos** — não corrija de forma ad-hoc.
+
+1. 🔴 **Reabra a sessão como ATIVA**: em `.sessions/<ISSUE-ID>/state.json` defina
+   `status:"running"` e atualize `updatedAt` (crie um `state.json` mínimo se não existir).
+2. 🧩 **Um worker por comentário/ajuste** em `.sessions/<ISSUE-ID>/workers/<id>.json`, com
+   `name` descritivo (ex.: `fix:pr-feedback-back`), `status:"pending"`, `steps:[]`.
+3. 🤖 **Spawne os agentes (Task tool)** em ondas como o `/orchestrate`, atualizando
+   `status`/`currentStep`/`steps[]` no worktree da sessão; cada um aplica o ajuste, roda
+   os testes e faz commit.
+4. ✅ **Só então** marque os workers `done`, `state.json.status:"done"`, e responda os
+   comentários na PR. **Enquanto houver ajuste pendente, `status` NUNCA é `done`** — a
+   tarefa permanece ATIVA no dashboard até tudo estar resolvido e aprovado.
+
 ## 🎯 Próximos Passos
 
 1. Aguardar revisão dos PRs
-2. Responder comentários e fazer ajustes
+2. Responder comentários e fazer ajustes (via o fluxo de agentes acima)
 3. Após aprovação, fazer merge na ordem recomendada
-4. Executar `context-cli feature:end <ISSUE-ID>` para limpar o workspace
+4. Limpar o workspace da sessão quando concluída

@@ -299,13 +299,30 @@ Cree `./.sessions/<ISSUE-ID>/pr-description.md`:
 - [Punto de atención 2]
 ```
 
-## 🚨 Problemas Encontrados
+## 🚨 Problemas Encontrados → corrección vía agentes (mini-orquestación)
 
-Si alguna validación falla:
-1. 🛑 **PARE** el proceso de creación de PR
-2. 📝 **DOCUMENTE** el problema
-3. 🔧 **CORRIJA** el problema
-4. 🔄 **EJECUTE** `/pre-pr` nuevamente
+Si alguna validación falla (tests rojos, conflicto, lint, ruptura de contrato, hallazgo de
+seguridad), **NO** marques la tarea como concluida ni sigas al PR. En vez de corregir de
+forma ad-hoc, compórtate como `/orchestrate`: **reabre la sesión y spawnea agentes correctivos**.
+
+1. 🔴 **Reabre la sesión como ACTIVA** (para que el dashboard muestre trabajo en curso):
+   - En `.sessions/<ISSUE-ID>/state.json`, define `status:"running"` y actualiza `updatedAt`.
+     (Si no existe — sesión del flujo antiguo — crea uno mínimo:
+     `{ issueId, title, status:"running", createdAt, updatedAt, waves:[] }`.)
+2. 🧩 **Arma un mini-grafo de corrección** — un worker por problema/repo impactado, con el
+   mismo formato de `/orchestrate` (arquetipo `implementer` para corregir,
+   `conflict-resolver` para conflictos de merge, `tester` para revalidar). Para cada uno crea
+   `.sessions/<ISSUE-ID>/workers/<id>.json` con un `name` descriptivo (ej.: `fix:back-tests`,
+   `fix:front-contract`), `status:"pending"`, `steps:[]`.
+3. 🤖 **Spawnea los agentes (Task tool)** en olas, igual que `/orchestrate`: actualiza
+   `status`/`currentStep`/`steps[]` de cada worker mientras trabajan, dentro del worktree de
+   la sesión (nunca el repo principal). Cada agente corrige su ámbito y corre los tests.
+4. ✅ **Solo entonces revalida** (corre `/pre-pr` de nuevo): si pasa, marca los workers
+   `done`, define `state.json.status:"done"` y ahora sí sigue al PR. Si aún falla, mantén
+   `running` y repite — la tarea sigue ACTIVA en el dashboard hasta estar realmente resuelta.
+
+> Regla de oro: **mientras haya una corrección pendiente, `status` NUNCA es `done`.** La
+> tarea sale del estado "activo" solo cuando todo pasa.
 
 ## 📊 Reporte de Validación
 

@@ -151,7 +151,10 @@ export async function readSession(orchestratorDir: string, issueId: string): Pro
       issueId,
       title: state?.title ?? artifactTitle ?? undefined,
       complexity: state?.complexity,
-      status: (state?.status as SessionState['status']) ?? deriveStatus(workers),
+      // Agents take precedence over state.status: if any worker is running/blocked, the
+      // session is running/blocked even if state.json still says "done" (e.g. pre-pr/pr
+      // reopened the work). Prevents a truly-active session from showing as done.
+      status: reconcileStatus(state?.status as SessionState['status'] | undefined, workers),
       createdAt: state?.createdAt,
       updatedAt: state?.updatedAt,
       repos: state?.repos,
@@ -174,6 +177,21 @@ function deriveStatus(workers: WorkerState[]): SessionState['status'] {
   if (workers.every((w) => w.status === 'done')) return 'done';
   if (workers.some((w) => w.status === 'running')) return 'running';
   return 'planned';
+}
+
+/**
+ * Reconcile the session's declared status with its agents. Live agent state wins over a
+ * stale `state.json`: a running/blocked worker means the session is running/blocked even
+ * if the file says "done" (e.g. /pre-pr or /pr reopened the work to fix something).
+ */
+function reconcileStatus(
+  declared: SessionState['status'] | undefined,
+  workers: WorkerState[]
+): SessionState['status'] {
+  if (workers.some((w) => w.status === 'running')) return 'running';
+  if (workers.some((w) => w.status === 'blocked')) return 'blocked';
+  if (declared) return declared;
+  return deriveStatus(workers);
 }
 
 function wavesToWorkers(waves?: string[][]): WorkerState[] {

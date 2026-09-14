@@ -727,7 +727,13 @@ async function render(){
     document.getElementById('metaText').textContent=sessions.length+' session(s)';
     const root=document.getElementById('root'); root.innerHTML='';
     if(!sessions.length){ root.appendChild(el('div','page-empty', activeOnly?'No active sessions right now.':'No sessions yet. Run <code>/orchestrate &lt;ISSUE-ID&gt;</code>.')); return; }
-    sessions.sort((a,b)=>(b.updatedAt||b.createdAt||'').localeCompare(a.updatedAt||a.createdAt||''));
+    // active first: running → blocked → planned/unknown → done; then most-recent within each group
+    const rank={running:0,blocked:1,planned:2,unknown:2,done:3};
+    sessions.sort((a,b)=>{
+      const ra=rank[a.status]??2, rb=rank[b.status]??2;
+      if(ra!==rb) return ra-rb;
+      return (b.updatedAt||b.createdAt||'').localeCompare(a.updatedAt||a.createdAt||'');
+    });
     const cont=el('div','sessions'); sessions.forEach(s=>cont.appendChild(session(s))); root.appendChild(cont);
   }catch(e){ document.getElementById('root').innerHTML='<div class="page-empty">Server unreachable.</div>'; }
 }

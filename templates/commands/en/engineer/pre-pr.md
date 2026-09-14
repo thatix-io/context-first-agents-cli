@@ -265,13 +265,30 @@ Create `./.sessions/<ISSUE-ID>/pr-description.md`:
 - [Point of attention 2]
 ```
 
-## 🚨 Issues Found
+## 🚨 Issues Found → fix via agents (mini-orchestration)
 
-If any validation fails:
-1. 🛑 **STOP** the PR creation process
-2. 📝 **DOCUMENT** the problem
-3. 🔧 **FIX** the problem
-4. 🔄 **RUN** `/pre-pr` again
+If any validation fails (red tests, conflict, lint, contract break, security finding),
+do **NOT** mark the task done and do **NOT** proceed to PR. Instead of fixing ad-hoc,
+behave like `/orchestrate`: **reopen the session and spawn corrective agents**.
+
+1. 🔴 **Reopen the session as ACTIVE** (so the dashboard shows work is in progress):
+   - In `.sessions/<ISSUE-ID>/state.json`, set `status:"running"` and refresh `updatedAt`.
+     (If missing — old-flow session — create a minimal one:
+     `{ issueId, title, status:"running", createdAt, updatedAt, waves:[] }`.)
+2. 🧩 **Build a small fix graph** — one worker per problem/impacted repo, same shape as
+   `/orchestrate` (archetype `implementer` to fix, `conflict-resolver` for merge conflicts,
+   `tester` to revalidate). For each, create `.sessions/<ISSUE-ID>/workers/<id>.json` with
+   a descriptive `name` (e.g. `fix:back-tests`, `fix:front-contract`), `status:"pending"`,
+   `steps:[]`.
+3. 🤖 **Spawn the agents (Task tool)** in waves, exactly like `/orchestrate`: update each
+   worker's `status`/`currentStep`/`steps[]` as they work, inside the session worktree
+   (never the main repo). Each agent fixes its scope and runs the tests.
+4. ✅ **Only then revalidate** (run `/pre-pr` again): if it passes, mark the workers `done`,
+   set `state.json.status:"done"`, and now proceed to PR. If it still fails, keep it
+   `running` and repeat — the task stays ACTIVE on the dashboard until it's truly resolved.
+
+> Golden rule: **while any fix is pending, `status` is NEVER `done`.** The task leaves the
+> "active" state only when everything passes.
 
 ## 📊 Validation Report
 
