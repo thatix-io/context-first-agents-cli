@@ -2,14 +2,23 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathExists } from '../utils/config.js';
 
+export interface StepEvent {
+  step: string;
+  at?: string | null;
+}
+
 export interface WorkerState {
   id: string;
+  /** Human-friendly name (role+target), e.g. "impl:front-audio". Falls back to id. */
+  name?: string;
   archetype?: string;
   repository?: string | null;
   objective?: string;
   dependsOn?: string[];
   status: 'pending' | 'running' | 'done' | 'blocked' | 'unknown';
   currentStep?: string | null;
+  /** Ordered history of steps this worker went through. */
+  steps?: StepEvent[];
   startedAt?: string | null;
   finishedAt?: string | null;
   verdict?: string | null;

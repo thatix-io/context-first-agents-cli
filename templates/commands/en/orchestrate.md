@@ -59,7 +59,13 @@ State the classification and the reason explicitly before continuing.
 ## Step 4 — Build the execution graph (DAG)
 
 Instantiate workers from `orchestration.archetypes`. Each worker node has:
-`{ id, archetype, objective, repository, dependsOn[], contextHints[] }`.
+`{ id, name, archetype, objective, repository, dependsOn[], contextHints[] }`.
+
+Besides the short `id` (`W1`, `W2`…), give each worker a **descriptive `name` =
+role + target**, derived from the archetype + repo/objective. Suggested prefixes:
+`impl:`, `integrate:`, `review:`, `test:`, `research:`, `plan:`. Examples:
+`impl:front-audio`, `impl:back-api`, `integrate:api↔ui`, `review:security`, `test:front`.
+The dashboard displays this `name` (the `id` stays internal).
 
 - **simple**
   - `W1 implementer` on the single impacted repo
@@ -133,8 +139,9 @@ Write machine-readable state into `.sessions/<ISSUE-ID>/` (format in the orchest
 
 1. `state.json`: `{ issueId, title, complexity, status:"planned", createdAt, repos, waves }`
    (`waves` = the waves from Step 4).
-2. `workers/<id>.json` for each node: `{ id, archetype, repository, objective, dependsOn,
-   status:"pending", currentStep:null, startedAt:null, finishedAt:null, verdict:null }`.
+2. `workers/<id>.json` for each node: `{ id, name, archetype, repository, objective,
+   dependsOn, status:"pending", currentStep:null, steps:[], startedAt:null,
+   finishedAt:null, verdict:null }` (include the descriptive `name` from Step 4).
 
 Keep writes small and frequent — the dashboard polls these files.
 
@@ -144,6 +151,8 @@ Execute the DAG respecting `dependsOn`. **On each transition, update the state f
 
 1. **When a wave starts**: for each node in the wave, set `workers/<id>.json` to
    `status:"running"`, `startedAt`, and a short `currentStep`; set `state.json.status="running"`.
+   **On every step change** during execution, update `currentStep` AND append
+   `{ step, at }` to the `steps[]` array (the dashboard shows this history as a pipeline).
 2. **Parallel wave**: spawn all nodes in the wave **in a single message with multiple Task
    calls** so they run concurrently. Give each subagent ONLY its compiled contract +
    objective — never the whole conversation.

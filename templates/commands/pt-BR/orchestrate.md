@@ -60,7 +60,13 @@ Declare a classificação e o motivo explicitamente antes de continuar.
 ## Passo 4 — Montar o grafo de execução (DAG)
 
 Instancie workers a partir de `orchestration.archetypes`. Cada nó tem:
-`{ id, archetype, objective, repository, dependsOn[], contextHints[] }`.
+`{ id, name, archetype, objective, repository, dependsOn[], contextHints[] }`.
+
+Além do `id` curto (`W1`, `W2`…), dê a cada worker um **`name` descritivo = papel + alvo**,
+derivado do arquétipo + repo/objetivo. Prefixos sugeridos: `impl:`, `integrate:`,
+`review:`, `test:`, `research:`, `plan:`. Exemplos:
+`impl:front-audio`, `impl:back-api`, `integrate:api↔ui`, `review:security`, `test:front`.
+É esse `name` que aparece no dashboard (o `id` fica interno).
 
 - **simple**
   - `W1 implementer` no único repo impactado
@@ -134,8 +140,9 @@ Grave o estado legível por máquina em `.sessions/<ISSUE-ID>/` (formato em
 
 1. `state.json`: `{ issueId, title, complexity, status:"planned", createdAt, repos, waves }`
    (`waves` = as ondas do Passo 4).
-2. `workers/<id>.json` para cada nó: `{ id, archetype, repository, objective, dependsOn,
-   status:"pending", currentStep:null, startedAt:null, finishedAt:null, verdict:null }`.
+2. `workers/<id>.json` para cada nó: `{ id, name, archetype, repository, objective,
+   dependsOn, status:"pending", currentStep:null, steps:[], startedAt:null,
+   finishedAt:null, verdict:null }` (inclua o `name` descritivo do Passo 4).
 
 Mantenha escritas pequenas e frequentes — o dashboard faz polling desses arquivos.
 
@@ -145,6 +152,8 @@ Execute o DAG respeitando `dependsOn`. **A cada transição, atualize os arquivo
 
 1. **Ao iniciar uma onda**: para cada nó da onda, marque `workers/<id>.json` com
    `status:"running"`, `startedAt`, e um `currentStep` curto; marque `state.json.status="running"`.
+   **A cada mudança de passo** durante a execução, atualize `currentStep` E anexe
+   `{ step, at }` ao array `steps[]` (o dashboard mostra esse histórico como pipeline).
 2. **Onda paralela**: spawne todos os nós da onda **numa única mensagem com múltiplas
    chamadas Task**, para rodarem concorrentemente. Dê a cada subagente APENAS o contrato
    compilado + objetivo — nunca a conversa inteira.

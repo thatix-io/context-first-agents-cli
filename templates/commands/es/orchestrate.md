@@ -60,7 +60,13 @@ Declara la clasificación y el motivo explícitamente antes de continuar.
 ## Paso 4 — Construir el grafo de ejecución (DAG)
 
 Instancia workers desde `orchestration.archetypes`. Cada nodo tiene:
-`{ id, archetype, objective, repository, dependsOn[], contextHints[] }`.
+`{ id, name, archetype, objective, repository, dependsOn[], contextHints[] }`.
+
+Además del `id` corto (`W1`, `W2`…), dale a cada worker un **`name` descriptivo =
+rol + objetivo**, derivado del arquetipo + repo/objetivo. Prefijos sugeridos:
+`impl:`, `integrate:`, `review:`, `test:`, `research:`, `plan:`. Ejemplos:
+`impl:front-audio`, `impl:back-api`, `integrate:api↔ui`, `review:security`, `test:front`.
+Es ese `name` el que aparece en el dashboard (el `id` queda interno).
 
 - **simple**
   - `W1 implementer` en el único repo impactado
@@ -134,8 +140,9 @@ Escribe el estado legible por máquina en `.sessions/<ISSUE-ID>/` (formato en el
 
 1. `state.json`: `{ issueId, title, complexity, status:"planned", createdAt, repos, waves }`
    (`waves` = las olas del Paso 4).
-2. `workers/<id>.json` para cada nodo: `{ id, archetype, repository, objective, dependsOn,
-   status:"pending", currentStep:null, startedAt:null, finishedAt:null, verdict:null }`.
+2. `workers/<id>.json` para cada nodo: `{ id, name, archetype, repository, objective,
+   dependsOn, status:"pending", currentStep:null, steps:[], startedAt:null,
+   finishedAt:null, verdict:null }` (incluye el `name` descriptivo del Paso 4).
 
 Mantén escrituras pequeñas y frecuentes — el dashboard hace polling de estos archivos.
 
@@ -145,6 +152,8 @@ Ejecuta el DAG respetando `dependsOn`. **En cada transición, actualiza los arch
 
 1. **Al iniciar una ola**: para cada nodo de la ola, marca `workers/<id>.json` con
    `status:"running"`, `startedAt`, y un `currentStep` corto; marca `state.json.status="running"`.
+   **En cada cambio de paso** durante la ejecución, actualiza `currentStep` Y agrega
+   `{ step, at }` al array `steps[]` (el dashboard muestra este historial como pipeline).
 2. **Ola paralela**: spawnea todos los nodos de la ola **en un único mensaje con múltiples
    llamadas Task**, para que corran concurrentemente. Dale a cada subagente SÓLO su
    contrato compilado + objetivo — nunca la conversación entera.

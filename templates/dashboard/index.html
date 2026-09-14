@@ -13,184 +13,285 @@
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text);
     font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,sans-serif; }
-  header { display:flex; align-items:center; gap:14px; padding:14px 22px;
-    border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg); z-index:10; }
-  header h1 { font-size:15px; margin:0; font-weight:600; }
-  header .project { color:var(--accent); }
-  header .meta { margin-left:auto; color:var(--muted); font-size:12px; }
+  a { color:inherit; text-decoration:none; }
+  code { background:#0e1420; padding:1px 5px; border-radius:4px; font-size:12px; }
 
-  .sessions { padding:20px 22px; display:flex; flex-direction:column; gap:26px; }
+  header { display:flex; align-items:center; gap:14px; padding:14px 22px;
+    border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg); z-index:20; }
+  header h1 { font-size:15px; margin:0; font-weight:600; cursor:pointer; }
+  header .crumb { color:var(--accent); }
+  header .meta { margin-left:auto; color:var(--muted); font-size:12px; display:flex; align-items:center; gap:14px; }
+  .switch { display:inline-flex; align-items:center; gap:7px; cursor:pointer; user-select:none; font-size:12px; }
+  .switch input { display:none; }
+  .switch .track { width:34px; height:18px; border-radius:20px; background:#2a3346; position:relative; transition:.2s; }
+  .switch .track:after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#8b95a8; transition:.2s; }
+  .switch input:checked + .track { background:#1c4a2e; }
+  .switch input:checked + .track:after { left:18px; background:var(--done); }
+
+  .wrap { padding:22px; }
+
+  /* ---------- projects landing ---------- */
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+  .pcard { border:1px solid var(--border); border-radius:12px; background:var(--panel); padding:16px 18px;
+    cursor:pointer; transition:.15s; display:block; }
+  .pcard:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .pcard .pname { font-size:16px; font-weight:700; margin-bottom:4px; }
+  .pcard .ppath { font-size:11px; color:var(--muted); word-break:break-all; margin-bottom:12px; }
+  .pcard .pstats { display:flex; gap:14px; font-size:13px; }
+  .pcard .stat b { color:var(--text); } .pcard .stat span { color:var(--muted); }
+  .pcard .live-badge { display:inline-flex; align-items:center; gap:6px; color:var(--done); font-weight:600; }
+  .pcard .live-badge i { width:8px;height:8px;border-radius:50%;background:var(--done); animation:ping 1.3s ease-out infinite; }
+
+  /* ---------- kanban ---------- */
+  .sessions { display:flex; flex-direction:column; gap:16px; }
   .session { border:1px solid var(--border); border-radius:12px; background:var(--panel); overflow:hidden; }
-  .session > .bar { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid var(--border); }
+  .session > .bar { display:flex; align-items:center; gap:12px; padding:13px 16px; cursor:pointer; }
+  .session .caret { transition:.2s; color:var(--muted); font-size:12px; }
+  .session.collapsed .caret { transform:rotate(-90deg); }
   .session .id { font-weight:700; font-size:15px; }
   .session .title { color:var(--muted); }
   .session .spacer { flex:1; }
   .pill { font-size:11px; font-weight:600; padding:3px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:.03em; }
   .pill.simple{ background:#1c3a2a; color:#6ee7a0; } .pill.medium{ background:#3a331c; color:#f0d264; } .pill.complex{ background:#3a1c22; color:#ff98a3; }
   .pill.st-planned{ background:#2a3346; color:#c4cede; } .pill.st-running{ background:#3a331c; color:#f0b429; }
-  .pill.st-done{ background:#1c3a2a; color:#3fce7c; } .pill.st-blocked{ background:#3a1c22; color:#ff5d6c; }
-  .pill.st-unknown{ background:#2a3346; color:#93a0b8; }
+  .pill.st-done{ background:#1c3a2a; color:#3fce7c; } .pill.st-blocked{ background:#3a1c22; color:#ff5d6c; } .pill.st-unknown{ background:#2a3346; color:#93a0b8; }
+  .live { display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:700; color:#3fce7c; background:#12281c; padding:4px 11px; border-radius:20px; }
+  .live > i { width:8px; height:8px; border-radius:50%; background:#3fce7c; animation:ping 1.3s ease-out infinite; }
+  @keyframes ping { 0%{box-shadow:0 0 0 0 #3fce7c99} 70%{box-shadow:0 0 0 7px #3fce7c00} 100%{box-shadow:0 0 0 0 #3fce7c00} }
+  .stale { font-size:12px; color:#f0b429; } .idle { font-size:12px; color:var(--muted); }
   .progress { height:6px; background:#0e1420; }
   .progress > i { display:block; height:100%; background:var(--done); transition:width .5s; }
-
-  /* live / idle / stale indicators */
-  .live { display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:700; color:#3fce7c;
-    background:#12281c; padding:4px 11px; border-radius:20px; }
-  .live > i { width:8px; height:8px; border-radius:50%; background:#3fce7c; box-shadow:0 0 0 0 #3fce7c;
-    animation:ping 1.3s ease-out infinite; }
-  @keyframes ping { 0%{box-shadow:0 0 0 0 #3fce7c99} 70%{box-shadow:0 0 0 7px #3fce7c00} 100%{box-shadow:0 0 0 0 #3fce7c00} }
-  .stale { font-size:12px; color:#f0b429; background:#2a2410; padding:4px 11px; border-radius:20px; }
-  .idle { font-size:12px; color:var(--muted); }
+  .body { display:block; }
+  .session.collapsed .body { display:none; }
 
   .board { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border); }
   @media(max-width:820px){ .board{ grid-template-columns:1fr 1fr; } }
-  .col { background:var(--panel); min-height:80px; padding:12px; display:flex; flex-direction:column; gap:10px; }
-  .col > h3 { margin:0 0 2px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
-    display:flex; align-items:center; gap:7px; }
+  .col { background:var(--panel); min-height:70px; padding:12px; display:flex; flex-direction:column; gap:10px; }
+  .col > h3 { margin:0; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); display:flex; align-items:center; gap:7px; }
   .col .cdot { width:8px; height:8px; border-radius:50%; }
-  .col.todo  .cdot{ background:var(--todo); }  .col.run .cdot{ background:var(--run); }
-  .col.done  .cdot{ background:var(--done); }  .col.block .cdot{ background:var(--block); }
+  .col.todo .cdot{ background:var(--todo); } .col.run .cdot{ background:var(--run); }
+  .col.done .cdot{ background:var(--done); } .col.block .cdot{ background:var(--block); }
   .col .k { margin-left:auto; font-size:11px; color:var(--muted); }
   .col.run.active { background:linear-gradient(180deg,rgba(240,180,41,.12),transparent 60%); box-shadow:inset 0 2px 0 var(--run); }
-  .col .empty { color:#5c6780; font-size:12px; font-style:italic; padding:6px 2px; }
 
   .card { border:1px solid var(--border); border-radius:9px; background:var(--panel2); padding:11px 12px; }
   .card.running { border-color:#5a4d1e; box-shadow:0 0 0 1px #f0b42933; }
   .card.blocked { border-color:#5a2530; }
-  .card .top { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
-  .card .ic { font-size:15px; line-height:1; }
-  .card .wid { font-weight:700; font-size:13px; }
+  .card .top { display:flex; align-items:center; gap:8px; margin-bottom:5px; flex-wrap:wrap; }
+  .card .ic { font-size:15px; } .card .nm { font-weight:700; font-size:13px; }
   .card .role { font-size:11px; color:var(--accent); font-weight:600; }
   .card .repo { margin-left:auto; font-size:11px; color:var(--muted); background:#0e1420; padding:2px 7px; border-radius:5px; }
   .card .obj { font-size:12.5px; color:#cdd6e6; }
   .card .step { margin-top:6px; font-size:12px; color:var(--run); display:flex; align-items:center; gap:6px; }
   .card .step .spin { width:10px; height:10px; border:2px solid #f0b429; border-top-color:transparent; border-radius:50%; animation:spin .8s linear infinite; }
   .card .dep { margin-top:5px; font-size:11px; color:var(--muted); }
-  .card .verdict { margin-top:6px; display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:5px; }
+  .card .foot { margin-top:7px; display:flex; align-items:center; gap:8px; }
+  .verdict { font-size:11px; font-weight:700; padding:2px 8px; border-radius:5px; }
   .verdict.ok { background:#1c3a2a; color:#3fce7c; } .verdict.bad { background:#3a1c22; color:#ff5d6c; }
-  .col .empty { color:#5c6780; font-size:12px; font-style:italic; padding:6px 2px; }
-
+  .steps-btn { margin-left:auto; font-size:11px; color:var(--accent); background:#0e1420; border:1px solid var(--border); border-radius:5px; padding:3px 8px; cursor:pointer; }
+  .steps-btn:hover { border-color:var(--accent); }
   @keyframes spin { to{ transform:rotate(360deg); } }
-  .note { font-size:11px; color:#f0b429; margin-left:6px; }
+
+  /* ---------- modal ---------- */
+  .modal-bg { position:fixed; inset:0; background:#000a; display:flex; align-items:center; justify-content:center; z-index:50; }
+  .modal { width:min(560px,92vw); max-height:80vh; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:14px; }
+  .modal .mh { display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--panel); }
+  .modal .mh .x { margin-left:auto; cursor:pointer; color:var(--muted); font-size:18px; }
+  .timeline { padding:14px 18px; }
+  .tl { position:relative; padding:0 0 0 22px; }
+  .tl:before { content:''; position:absolute; left:6px; top:4px; bottom:4px; width:2px; background:var(--border); }
+  .tl .ev { position:relative; padding:6px 0; }
+  .tl .ev:before { content:''; position:absolute; left:-19px; top:10px; width:10px; height:10px; border-radius:50%; background:var(--accent); border:2px solid var(--panel); }
+  .tl .ev.cur:before { background:var(--run); animation:ping 1.3s infinite; }
+  .tl .ev .t { font-size:11px; color:var(--muted); }
+  .tl .ev .s { font-size:13px; }
+
   .page-empty { color:var(--muted); text-align:center; padding:60px; }
-  code { background:#0e1420; padding:1px 5px; border-radius:4px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Agents Dashboard · <span class="project" id="project">…</span></h1>
-  <div class="meta"><span id="count">0</span> sessions · auto-refresh 1.5s</div>
+  <h1 id="home">Agents Dashboard</h1>
+  <span class="crumb" id="crumb"></span>
+  <div class="meta">
+    <label class="switch" id="activeToggleWrap" style="display:none">
+      <input type="checkbox" id="activeOnly"><span class="track"></span>active only
+    </label>
+    <span id="metaText">…</span>
+  </div>
 </header>
-<div class="sessions" id="root"><div class="page-empty">Loading…</div></div>
+<div class="wrap" id="root"><div class="page-empty">Loading…</div></div>
+<div id="modalRoot"></div>
 
 <script>
 const ROLE_ICON = { implementer:'🔨', integrator:'🔗', reviewer:'🔍', tester:'🧪', planner:'🗺️', researcher:'📚' };
 const COLS = [
-  { key:'todo',  label:'To do',    match:w=>w.status==='pending'||w.status==='unknown' },
-  { key:'run',   label:'Working',  match:w=>w.status==='running' },
-  { key:'done',  label:'Done',     match:w=>w.status==='done' },
-  { key:'block', label:'Blocked',  match:w=>w.status==='blocked' },
+  { key:'todo',  label:'To do',   match:w=>w.status==='pending'||w.status==='unknown' },
+  { key:'run',   label:'Working', match:w=>w.status==='running' },
+  { key:'done',  label:'Done',    match:w=>w.status==='done' },
+  { key:'block', label:'Blocked', match:w=>w.status==='blocked' },
 ];
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
 const esc=s=>(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const okVerdict=v=>/pass|green|consistent|done|ok/i.test(v||'');
+const qs=k=>new URLSearchParams(location.search).get(k);
+const nameOf=w=> w.name || (w.archetype? (w.archetype+(w.id?(' '+w.id):'')) : (w.id||'agent'));
+function ago(iso){ if(!iso) return null; let s=Math.round((Date.now()-new Date(iso))/1000); if(s<0)s=0;
+  if(s<60)return s+'s'; if(s<3600)return Math.round(s/60)+'m'; return Math.round(s/3600)+'h'; }
 
+const collapsed = new Set(JSON.parse(localStorage.getItem('cfa_collapsed')||'[]'));
+const saveCollapsed=()=>localStorage.setItem('cfa_collapsed',JSON.stringify([...collapsed]));
+let activeOnly = localStorage.getItem('cfa_activeOnly')==='1';
+
+/* ---------------- modal (step history / pipeline) ---------------- */
+function openStepsModal(w){
+  const bg = el('div','modal-bg');
+  bg.addEventListener('click',e=>{ if(e.target===bg) bg.remove(); });
+  const m = el('div','modal');
+  const h = el('div','mh');
+  h.appendChild(el('span','ic',ROLE_ICON[w.archetype]||'🤖'));
+  h.appendChild(el('strong',null,esc(nameOf(w))));
+  h.appendChild(el('span','role',esc(w.archetype||'')));
+  const x = el('span','x','✕'); x.onclick=()=>bg.remove(); h.appendChild(x);
+  m.appendChild(h);
+
+  const tl = el('div','timeline');
+  const steps = (w.steps&&w.steps.length) ? w.steps
+    : (w.currentStep? [{step:w.currentStep, at:w.startedAt}] : []);
+  if(!steps.length){ tl.appendChild(el('div','page-empty','No step history recorded yet.')); }
+  else {
+    const line = el('div','tl');
+    steps.forEach((s,i)=>{
+      const isCur = w.status==='running' && i===steps.length-1;
+      const ev = el('div','ev'+(isCur?' cur':''));
+      ev.appendChild(el('div','t', esc(s.at? new Date(s.at).toLocaleTimeString():'')));
+      ev.appendChild(el('div','s', esc(typeof s==='string'?s:s.step)));
+      line.appendChild(ev);
+    });
+    tl.appendChild(line);
+  }
+  m.appendChild(tl);
+  bg.appendChild(m);
+  document.getElementById('modalRoot').appendChild(bg);
+}
+
+/* ---------------- agent card ---------------- */
 function card(w){
   const c = el('div','card '+(w.status||''));
   const top = el('div','top');
   top.appendChild(el('span','ic', ROLE_ICON[w.archetype]||'🤖'));
-  top.appendChild(el('span','wid', esc(w.id||'')));
+  top.appendChild(el('span','nm', esc(nameOf(w))));
   top.appendChild(el('span','role', esc(w.archetype||'')));
   if(w.repository) top.appendChild(el('span','repo', esc(w.repository)));
   c.appendChild(top);
-
   if(w.objective) c.appendChild(el('div','obj', esc(w.objective)));
-
   if(w.status==='running' && w.currentStep){
-    const s = el('div','step'); s.appendChild(el('span','spin'));
-    s.appendChild(el('span',null,esc(w.currentStep))); c.appendChild(s);
+    const s=el('div','step'); s.appendChild(el('span','spin')); s.appendChild(el('span',null,esc(w.currentStep))); c.appendChild(s);
   }
   if((w.dependsOn||[]).length && w.status!=='done')
     c.appendChild(el('div','dep','⤷ waiting on '+esc(w.dependsOn.join(', '))));
-  if(w.verdict)
-    c.appendChild(el('div','verdict '+(okVerdict(w.verdict)?'ok':'bad'), esc(w.verdict)));
+
+  const foot = el('div','foot');
+  if(w.verdict) foot.appendChild(el('span','verdict '+(okVerdict(w.verdict)?'ok':'bad'), esc(w.verdict)));
+  const hasHistory = (w.steps&&w.steps.length) || w.currentStep;
+  if(hasHistory){
+    const b=el('button','steps-btn','⧗ steps'+((w.steps&&w.steps.length)?(' ('+w.steps.length+')'):''));
+    b.onclick=()=>openStepsModal(w); foot.appendChild(b);
+  }
+  if(foot.childNodes.length) c.appendChild(foot);
   return c;
 }
 
-function ago(iso){
-  if(!iso) return null;
-  const sec = Math.round((Date.now()-new Date(iso).getTime())/1000);
-  if(sec<0) return '0s';
-  if(sec<60) return sec+'s';
-  if(sec<3600) return Math.round(sec/60)+'m';
-  return Math.round(sec/3600)+'h';
-}
-
+/* ---------------- session (accordion) ---------------- */
 function session(s){
-  const box = el('div','session');
   const ws = s.workers||[];
   const running = ws.filter(w=>w.status==='running').length;
-  const sinceSec = s.updatedAt ? (Date.now()-new Date(s.updatedAt).getTime())/1000 : Infinity;
-  // "live" only if something is running AND the file changed very recently
-  const isLive = running>0 && sinceSec < 20;
+  const sinceSec = s.updatedAt ? (Date.now()-new Date(s.updatedAt))/1000 : Infinity;
+  const isLive = running>0 && sinceSec<20;
+  const isCollapsed = collapsed.has(s.issueId);
 
+  const box = el('div','session'+(isCollapsed?' collapsed':''));
   const bar = el('div','bar');
+  bar.appendChild(el('span','caret','▾'));
   bar.appendChild(el('span','id', esc(s.issueId)));
   if(s.title) bar.appendChild(el('span','title', esc(s.title)));
   bar.appendChild(el('span','spacer'));
-  if(s.fromPlanFallback) bar.appendChild(el('span','note','planned view (no live state)'));
-
-  // Live/idle indicator — answers "is anything actually running?"
-  if(isLive){
-    bar.appendChild(el('span','live','<i></i>LIVE · '+running+' working'));
-  } else if(running>0){
-    bar.appendChild(el('span','stale','⏸ '+running+' marked running · no update for '+ago(s.updatedAt)));
-  } else if(s.updatedAt){
-    bar.appendChild(el('span','idle','idle · last activity '+ago(s.updatedAt)+' ago'));
-  }
-
+  if(s.fromPlanFallback) bar.appendChild(el('span','idle','planned view'));
+  if(isLive) bar.appendChild(el('span','live','<i></i>LIVE · '+running+' working'));
+  else if(running>0) bar.appendChild(el('span','stale','⏸ '+running+' running · '+ago(s.updatedAt)+' ago'));
+  else if(s.updatedAt) bar.appendChild(el('span','idle','idle · '+ago(s.updatedAt)+' ago'));
   if(s.complexity) bar.appendChild(el('span','pill '+s.complexity, esc(s.complexity)));
   bar.appendChild(el('span','pill st-'+(s.status||'unknown'), esc(s.status||'unknown')));
+  bar.onclick=()=>{ if(collapsed.has(s.issueId)) collapsed.delete(s.issueId); else collapsed.add(s.issueId); saveCollapsed(); render(); };
   box.appendChild(bar);
 
-  const total = ws.length, done = ws.filter(w=>w.status==='done').length;
-  const prog = el('div','progress'); prog.appendChild(el('i',null,''));
-  prog.firstChild.style.width = total? Math.round(done/total*100)+'%' : '0%';
-  box.appendChild(prog);
+  const total=ws.length, done=ws.filter(w=>w.status==='done').length;
+  const prog=el('div','progress'); const bar2=el('i'); bar2.style.width=total?Math.round(done/total*100)+'%':'0%'; prog.appendChild(bar2); box.appendChild(prog);
 
-  const board = el('div','board');
+  const body=el('div','body'); const board=el('div','board');
   for(const col of COLS){
-    const items = ws.filter(col.match);
-    const c = el('div','col '+col.key);
-    if(col.key==='run' && (isLive || running>0)) c.classList.add('active');
-    const h = el('h3',null,'<span class="cdot"></span>'+col.label);
-    h.appendChild(el('span','k', String(items.length)));
-    c.appendChild(h);
-    if(!items.length){
-      const msg = col.key==='run' ? 'nobody working right now' : '—';
-      c.appendChild(el('div','empty', msg));
-    }
+    let items=ws.filter(col.match);
+    const c=el('div','col '+col.key);
+    if(col.key==='run' && running>0) c.classList.add('active');
+    const h=el('h3',null,'<span class="cdot"></span>'+col.label); h.appendChild(el('span','k',String(items.length))); c.appendChild(h);
+    if(!items.length) c.appendChild(el('div','empty', col.key==='run'?'nobody working':'—'));
     items.forEach(w=>c.appendChild(card(w)));
     board.appendChild(c);
   }
-  box.appendChild(board);
+  body.appendChild(board); box.appendChild(body);
   return box;
 }
 
-async function refresh(){
-  try{
-    const data = await (await fetch('/api/sessions')).json();
-    document.getElementById('project').textContent = data.project||'orchestrator';
-    document.getElementById('count').textContent = (data.sessions||[]).length;
-    const root = document.getElementById('root'); root.innerHTML='';
-    if(!(data.sessions||[]).length){ root.appendChild(el('div','page-empty','No sessions yet. Run <code>/orchestrate &lt;ISSUE-ID&gt;</code>.')); return; }
-    data.sessions.sort((a,b)=>(b.updatedAt||b.createdAt||'').localeCompare(a.updatedAt||a.createdAt||''));
-    data.sessions.forEach(s=>root.appendChild(session(s)));
-  }catch(e){
-    document.getElementById('root').innerHTML='<div class="page-empty">Server unreachable — is <code>context-agents dashboard</code> running?</div>';
+/* ---------------- views ---------------- */
+let LAST=null;
+async function render(){
+  const project=qs('project');
+  document.getElementById('home').onclick=()=>{ location.search=''; };
+  const toggleWrap=document.getElementById('activeToggleWrap');
+
+  if(!project){ // ----- landing -----
+    toggleWrap.style.display='none';
+    document.getElementById('crumb').textContent='';
+    try{
+      const data=await (await fetch('/api/projects')).json();
+      document.getElementById('metaText').textContent=(data.projects||[]).length+' project(s)';
+      const root=document.getElementById('root'); root.innerHTML='';
+      if(!(data.projects||[]).length){ root.appendChild(el('div','page-empty','No projects linked yet.<br>Run <code>context-agents dashboard</code> inside an orchestrator.')); return; }
+      const grid=el('div','grid');
+      data.projects.sort((a,b)=>(b.running-a.running)||a.name.localeCompare(b.name));
+      data.projects.forEach(p=>{
+        const a=el('a','pcard'); a.href='?project='+encodeURIComponent(p.name);
+        a.appendChild(el('div','pname',esc(p.name)));
+        a.appendChild(el('div','ppath',esc(p.path)));
+        const st=el('div','pstats');
+        st.appendChild(el('span','stat','<b>'+p.sessions+'</b> <span>sessions</span>'));
+        if(p.running>0) st.appendChild(el('span','live-badge','<i></i>'+p.running+' running'));
+        else st.appendChild(el('span','stat','<span>idle</span>'));
+        a.appendChild(st); grid.appendChild(a);
+      });
+      root.appendChild(grid);
+    }catch(e){ document.getElementById('root').innerHTML='<div class="page-empty">Server unreachable.</div>'; }
+    return;
   }
+
+  // ----- kanban for a project -----
+  toggleWrap.style.display='inline-flex';
+  document.getElementById('activeOnly').checked=activeOnly;
+  document.getElementById('crumb').textContent=' / '+project;
+  try{
+    const data=await (await fetch('/api/sessions?project='+encodeURIComponent(project))).json();
+    let sessions=data.sessions||[];
+    if(activeOnly) sessions=sessions.filter(s=>s.status==='running');
+    document.getElementById('metaText').textContent=sessions.length+' session(s)';
+    const root=document.getElementById('root'); root.innerHTML='';
+    if(!sessions.length){ root.appendChild(el('div','page-empty', activeOnly?'No active sessions right now.':'No sessions yet. Run <code>/orchestrate &lt;ISSUE-ID&gt;</code>.')); return; }
+    sessions.sort((a,b)=>(b.updatedAt||b.createdAt||'').localeCompare(a.updatedAt||a.createdAt||''));
+    const cont=el('div','sessions'); sessions.forEach(s=>cont.appendChild(session(s))); root.appendChild(cont);
+  }catch(e){ document.getElementById('root').innerHTML='<div class="page-empty">Server unreachable.</div>'; }
 }
-refresh(); setInterval(refresh,1500);
+
+document.getElementById('activeOnly').addEventListener('change',e=>{ activeOnly=e.target.checked; localStorage.setItem('cfa_activeOnly',activeOnly?'1':'0'); render(); });
+render(); setInterval(render,1500);
 </script>
 </body>
 </html>

@@ -58,8 +58,9 @@ program
 
 program
   .command('dashboard')
-  .description('Serve a local web dashboard of sessions and running agents')
+  .description('Serve a local multi-project dashboard; run in any orchestrator to add it')
   .option('-p, --port <port>', 'Port to listen on', '4517')
+  .option('--no-open', 'Do not open the browser automatically')
   .action(dashboardCommand);
 
 program.parseAsync(process.argv);

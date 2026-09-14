@@ -37,19 +37,31 @@ tools (like `context-agents dashboard`) can render live progress. Human-readable
 ```json
 {
   "id": "W1",
+  "name": "impl:client-b-api",
   "archetype": "implementer",
   "repository": "client-b",
   "objective": "Audio pipeline: mic+tab capture, FFT bands/RMS/onset",
   "dependsOn": [],
   "status": "running",
   "currentStep": "implementing FFT analyser",
+  "steps": [
+    { "step": "reading spec", "at": "2026-09-13T12:11:00Z" },
+    { "step": "scaffolding controller", "at": "2026-09-13T12:12:10Z" },
+    { "step": "implementing FFT analyser", "at": "2026-09-13T12:13:40Z" }
+  ],
   "startedAt": "2026-09-13T12:11:00Z",
   "finishedAt": null,
   "verdict": null
 }
 ```
 
+- `id`: short stable id (`W1`). `name`: human-friendly **role+target**, e.g.
+  `impl:client-b-api`, `review:security`, `integrate:api↔ui`, `test:client-b`. The
+  dashboard shows `name` and falls back to `id`.
 - `status`: `pending` | `running` | `done` | `blocked`.
+- `currentStep`: the step happening now. **`steps[]`**: append each step (with `at`
+  timestamp) as it happens — this is the pipeline history the dashboard shows in the
+  step modal. `currentStep` should equal the last entry of `steps`.
 - `verdict` (optional): for reviewer/tester/integrator, e.g. `PASS` | `BLOCKED` |
   `GREEN` | `RED` | `CONSISTENT` | `MISMATCH`.
 
