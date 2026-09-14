@@ -245,5 +245,6 @@ corretivos** — não corrija de forma ad-hoc.
 
 1. Aguardar revisão dos PRs
 2. Responder comentários e fazer ajustes (via o fluxo de agentes acima)
-3. Após aprovação, fazer merge na ordem recomendada
+3. Após aprovação, rode **`/merge <ISSUE-ID>`** para integrar na main (atualiza a base,
+   resolve conflitos com agentes, confirma e faz o merge na ordem recomendada)
 4. Limpar o workspace da sessão quando concluída

@@ -211,5 +211,6 @@ ad-hoc.
 
 1. Await PR reviews
 2. Respond to comments and make adjustments (via the agent flow above)
-3. After approval, merge in the recommended order
+3. After approval, run **`/merge <ISSUE-ID>`** to integrate into main (updates the base,
+   resolves conflicts with agents, confirms, and merges in the recommended order)
 4. Clean up the session workspace when done

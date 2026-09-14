@@ -134,7 +134,8 @@ Setup happens **once**; then it's the same short loop per feature.
      integrator/tester, plus a reviewer if risky),
    - write everything to `.sessions/<ISSUE-ID>/` and summarize the result.
 4. Review the summary. If the reviewer flagged blockers, fix and re-run the affected part.
-5. Open the PR(s) from the per-repo worktrees (or use `/pre-pr` / `/pr`).
+5. Ship it: **`/pre-pr`** (validate) → **`/pr`** (open PRs) → **`/merge`** (update base,
+   resolve conflicts with agents, confirm, and merge into main).
 
 The classic **`/start` → `/plan` → `/work`** commands are still installed as **manual
 escape hatches** — for most tasks `/orchestrate` replaces that whole sequence. Quality
@@ -156,7 +157,7 @@ commands `/observe` and `/metrics` are also included.
 
 **Installed `.md` commands** (into `.claude/commands/`): `warm-up`,
 `products/{collect,refine,spec,check}`, **`orchestrate`** (+ `agents/`),
-`engineer/{start,plan,work,pre-pr,pr}` (escape hatches), `quality/{observe,metrics}`.
+`engineer/{start,plan,work,pre-pr,pr,merge}` (escape hatches + ship), `quality/{observe,metrics}`.
 
 ## Dashboard
 
