@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "project": "my-project",
+  "description": "Example orchestrator manifest — replace with your own repos.",
+  "repositories": [
+    {
+      "id": "metaspecs",
+      "role": "metaspecs",
+      "url": "git@example.com:org/metaspecs.git",
+      "mainBranch": "main",
+      "description": "Normative specifications (source of truth)",
+      "hints": ["spec", "adr", "contract", "documentation"]
+    },
+    {
+      "id": "service-a",
+      "role": "service",
+      "url": "git@example.com:org/service-a.git",
+      "path": "../service-a",
+      "mainBranch": "main",
+      "description": "A backend service",
+      "hints": ["api", "backend", "service", "endpoint"],
+      "context": ["../metaspecs/specs/api.md"],
+      "testCommand": "npm test"
+    },
+    {
+      "id": "client-b",
+      "role": "application",
+      "url": "git@example.com:org/client-b.git",
+      "path": "../client-b",
+      "mainBranch": "main",
+      "description": "A client application",
+      "hints": ["ui", "client", "frontend", "screen"],
+      "context": ["../metaspecs/specs/design.md"],
+      "testCommand": "npm test",
+      "dependsOn": ["service-a"]
+    }
+  ],
+  "orchestration": {
+    "archetypes": ["planner", "researcher", "implementer", "reviewer", "tester", "integrator"],
+    "riskSignals": ["migration", "payment", "security", "breaking change", "contract", "webhook", "auth"],
+    "parallelism": { "maxWorkers": 8, "maxPerRepository": 2 },
+    "contextPolicy": "select-do-not-dump",
+    "maxFilesPerWorker": 20,
+    "indexes": ["../metaspecs/specs/index.md"]
+  }
+}

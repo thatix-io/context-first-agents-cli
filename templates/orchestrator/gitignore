@@ -1,0 +1,6 @@
+# Context-First Agents — orchestrator .gitignore
+.contextrc.json
+ai.properties.md
+.sessions/
+node_modules/
+.DS_Store
