@@ -29,7 +29,10 @@ deriva automaticamente. `/plan` e `/work` podem continuar existindo como escape 
    `hints`, opcionalmente `context`, `testCommand`, `mainBranch`) e o bloco
    `orchestration` (`archetypes`, `riskSignals`, `parallelism`, `contextPolicy`,
    `maxFilesPerWorker`, `indexes`).
-2. Leia `ai.properties.md` para `base_path` e config do task manager (se houver).
+2. Leia `ai.properties.md` para `base_path` e a config do task manager (se houver):
+   `task_management_system` + os campos do tracker (jira: `jira_site`/`jira_project`;
+   linear: `linear_team`; github: `github_org`/`github_repo`). Use-os para localizar a
+   issue via MCP.
 3. Localize o repo de specs: o repositório com `role: metaspecs` (ou `specs-provider`).
 
 ## Passo 2 — Carregar a spec

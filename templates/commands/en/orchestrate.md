@@ -28,7 +28,10 @@ runtime derives automatically. `/plan` and `/work` may still exist as manual esc
 1. Read `context-manifest.json`. Extract `repositories[]` (each has `id`, `role`, `hints`,
    optional `context`, `testCommand`, `mainBranch`) and the `orchestration` block
    (`archetypes`, `riskSignals`, `parallelism`, `contextPolicy`, `maxFilesPerWorker`, `indexes`).
-2. Read `ai.properties.md` for `base_path` and task manager settings (if any).
+2. Read `ai.properties.md` for `base_path` and the task manager settings (if any):
+   `task_management_system` + the tracker fields (jira: `jira_site`/`jira_project`;
+   linear: `linear_team`; github: `github_org`/`github_repo`). Use them to locate the
+   issue via MCP.
 3. Locate the specs repo: the repository with `role: metaspecs` (or `specs-provider`).
 
 ## Step 2 — Load the spec
