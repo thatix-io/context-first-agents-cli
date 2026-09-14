@@ -17,7 +17,8 @@
   code { background:#0e1420; padding:1px 5px; border-radius:4px; font-size:12px; }
 
   header { display:flex; align-items:center; gap:14px; padding:14px 22px;
-    border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg); z-index:20; }
+    border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--bg); z-index:20; flex-wrap:wrap; }
+  @media(max-width:640px){ header { padding:12px 14px; gap:10px; } }
   header h1 { font-size:15px; margin:0; font-weight:600; cursor:pointer; }
   header .crumb { color:var(--accent); }
   header .meta { margin-left:auto; color:var(--muted); font-size:12px; display:flex; align-items:center; gap:14px; }
@@ -28,7 +29,8 @@
   .switch input:checked + .track { background:#1c4a2e; }
   .switch input:checked + .track:after { left:18px; background:var(--done); }
 
-  .wrap { padding:22px; }
+  .wrap { padding:22px; max-width:1600px; margin:0 auto; }
+  @media(max-width:640px){ .wrap { padding:12px; } }
 
   /* ---------- projects landing ---------- */
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
@@ -45,12 +47,12 @@
   /* ---------- kanban ---------- */
   .sessions { display:flex; flex-direction:column; gap:16px; }
   .session { border:1px solid var(--border); border-radius:12px; background:var(--panel); overflow:hidden; }
-  .session > .bar { display:flex; align-items:center; gap:12px; padding:13px 16px; cursor:pointer; }
+  .session > .bar { display:flex; align-items:center; gap:10px; padding:13px 16px; cursor:pointer; flex-wrap:wrap; }
   .session .caret { transition:.2s; color:var(--muted); font-size:12px; }
   .session.collapsed .caret { transform:rotate(-90deg); }
-  .session .id { font-weight:700; font-size:15px; }
+  .session .id { font-weight:700; font-size:15px; white-space:nowrap; }
   .session .sep { color:#4a5570; }
-  .session .title { color:var(--text); font-size:14px; }
+  .session .title { color:var(--text); font-size:14px; min-width:120px; flex:1 1 auto; }
   .session .spacer { flex:1; }
   .pill { font-size:11px; font-weight:600; padding:3px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:.03em; }
   .pill.simple{ background:#1c3a2a; color:#6ee7a0; } .pill.medium{ background:#3a331c; color:#f0d264; } .pill.complex{ background:#3a1c22; color:#ff98a3; }
@@ -76,9 +78,11 @@
   .body { display:block; }
   .session.collapsed .body { display:none; }
 
-  .board { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border); }
-  @media(max-width:820px){ .board{ grid-template-columns:1fr 1fr; } }
-  .col { background:var(--panel); min-height:70px; padding:12px; display:flex; flex-direction:column; gap:10px; }
+  /* Fluid board: columns wrap based on available width instead of forcing 4 across. */
+  .board { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; background:var(--border); }
+  @media(max-width:1180px){ .board{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media(max-width:560px){ .board{ grid-template-columns:1fr; } }
+  .col { background:var(--panel); min-height:70px; padding:12px; display:flex; flex-direction:column; gap:10px; min-width:0; }
   .col > h3 { margin:0; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); display:flex; align-items:center; gap:7px; }
   .col .cdot { width:8px; height:8px; border-radius:50%; }
   .col.todo .cdot{ background:var(--todo); } .col.run .cdot{ background:var(--run); }
@@ -86,22 +90,34 @@
   .col .k { margin-left:auto; font-size:11px; color:var(--muted); }
   .col.run.active { background:linear-gradient(180deg,rgba(240,180,41,.12),transparent 60%); box-shadow:inset 0 2px 0 var(--run); }
 
-  .card { border:1px solid var(--border); border-radius:9px; background:var(--panel2); padding:11px 12px; }
+  .card { border:1px solid var(--border); border-radius:9px; background:var(--panel2); padding:11px 12px; min-width:0; overflow-wrap:anywhere; }
   .card.running { border-color:#5a4d1e; box-shadow:0 0 0 1px #f0b42933; }
   .card.blocked { border-color:#5a2530; }
   .card .top { display:flex; align-items:center; gap:8px; margin-bottom:5px; flex-wrap:wrap; }
   .card .ic { font-size:15px; } .card .nm { font-weight:700; font-size:13px; }
   .card .role { font-size:11px; color:var(--accent); font-weight:600; }
-  .card .repo { margin-left:auto; font-size:11px; color:var(--muted); background:#0e1420; padding:2px 7px; border-radius:5px; }
-  .card .obj { font-size:12.5px; color:#cdd6e6; }
+  .card .repo { margin-left:auto; font-size:11px; color:var(--muted); background:#0e1420; padding:2px 7px; border-radius:5px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .card .obj { font-size:12.5px; color:#cdd6e6; cursor:pointer; }
+  .card .obj:hover { color:#fff; }
+  /* multi-line ellipsis: cap text height, show … when longer */
+  .clamp { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  .clamp1 { display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
   .card .step { margin-top:6px; font-size:12px; color:var(--run); display:flex; align-items:center; gap:6px; }
   .card .step .spin { width:10px; height:10px; border:2px solid #f0b429; border-top-color:transparent; border-radius:50%; animation:spin .8s linear infinite; }
   .card .dep { margin-top:5px; font-size:11px; color:var(--muted); }
-  .card .foot { margin-top:7px; display:flex; align-items:center; gap:8px; }
-  .verdict { font-size:11px; font-weight:700; padding:2px 8px; border-radius:5px; }
-  .verdict.ok { background:#1c3a2a; color:#3fce7c; } .verdict.bad { background:#3a1c22; color:#ff5d6c; }
-  .steps-btn { margin-left:auto; font-size:11px; color:var(--accent); background:#0e1420; border:1px solid var(--border); border-radius:5px; padding:3px 8px; cursor:pointer; }
-  .steps-btn:hover { border-color:var(--accent); }
+  /* verdict as a fixed-height quadrant with ellipsis + click-to-expand */
+  .verdict-box { margin-top:8px; padding:8px 9px; border-radius:6px; cursor:pointer; }
+  .verdict-box.ok { background:#12281c; border:1px solid #1c3a2a; }
+  .verdict-box.bad { background:#2a1418; border:1px solid #3a1c22; }
+  .verdict-txt { font-size:11.5px; font-weight:600; line-height:1.45; }
+  .verdict-box.ok .verdict-txt { color:#5dff9b; }
+  .verdict-box.bad .verdict-txt { color:#ff8b95; }
+  .verdict-box:hover { filter:brightness(1.15); }
+  /* footer: buttons on their own row, full width */
+  .card .foot { margin-top:8px; display:flex; }
+  .steps-btn { width:100%; font-size:11px; color:var(--accent); background:#0e1420; border:1px solid var(--border);
+    border-radius:6px; padding:6px 8px; cursor:pointer; text-align:center; }
+  .steps-btn:hover { border-color:var(--accent); background:#101a2e; }
   @keyframes spin { to{ transform:rotate(360deg); } }
 
   /* ---------- modal ---------- */
@@ -109,6 +125,7 @@
   .modal { width:min(560px,92vw); max-height:80vh; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:14px; }
   .modal .mh { display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--panel); }
   .modal .mh .x { margin-left:auto; cursor:pointer; color:var(--muted); font-size:18px; }
+  .modal-text { padding:16px 18px; font-size:13.5px; line-height:1.6; color:#dfe7f5; white-space:pre-wrap; word-break:break-word; }
   .timeline { padding:14px 18px; }
   .tl { position:relative; padding:0 0 0 22px; }
   .tl:before { content:''; position:absolute; left:6px; top:4px; bottom:4px; width:2px; background:var(--border); }
@@ -187,6 +204,21 @@ function openStepsModal(w){
   document.getElementById('modalRoot').appendChild(bg);
 }
 
+/* generic text modal (full verdict / full objective) */
+function openTextModal(w, heading, text){
+  const bg = el('div','modal-bg');
+  bg.addEventListener('click',e=>{ if(e.target===bg) bg.remove(); });
+  const m = el('div','modal');
+  const h = el('div','mh');
+  h.appendChild(el('span','ic',ROLE_ICON[w.archetype]||'🤖'));
+  h.appendChild(el('strong',null,esc(nameOf(w))+' — '+esc(heading)));
+  const x = el('span','x','✕'); x.onclick=()=>bg.remove(); h.appendChild(x);
+  m.appendChild(h);
+  m.appendChild(el('div','modal-text', esc(text)));
+  bg.appendChild(m);
+  document.getElementById('modalRoot').appendChild(bg);
+}
+
 /* ---------------- agent card ---------------- */
 function card(w){
   const c = el('div','card '+(w.status||''));
@@ -196,21 +228,34 @@ function card(w){
   top.appendChild(el('span','role', esc(w.archetype||'')));
   if(w.repository) top.appendChild(el('span','repo', esc(w.repository)));
   c.appendChild(top);
-  if(w.objective) c.appendChild(el('div','obj', esc(w.objective)));
+  if(w.objective){
+    const o=el('div','obj clamp', esc(w.objective));
+    o.title='clique para ver tudo';
+    o.onclick=()=>openTextModal(w,'objective',w.objective);
+    c.appendChild(o);
+  }
   if(w.status==='running' && w.currentStep){
-    const s=el('div','step'); s.appendChild(el('span','spin')); s.appendChild(el('span',null,esc(w.currentStep))); c.appendChild(s);
+    const s=el('div','step'); s.appendChild(el('span','spin')); s.appendChild(el('span','clamp1',esc(w.currentStep))); c.appendChild(s);
   }
   if((w.dependsOn||[]).length && w.status!=='done')
     c.appendChild(el('div','dep','⤷ waiting on '+esc(w.dependsOn.join(', '))));
 
-  const foot = el('div','foot');
-  if(w.verdict) foot.appendChild(el('span','verdict '+(okVerdict(w.verdict)?'ok':'bad'), esc(w.verdict)));
+  // verdict: fixed-height block, ellipsis if long, click → modal with full text
+  if(w.verdict){
+    const v=el('div','verdict-box '+(okVerdict(w.verdict)?'ok':'bad'));
+    v.appendChild(el('div','verdict-txt clamp', esc(w.verdict)));
+    v.title='clique para ver tudo'; v.onclick=()=>openTextModal(w,'verdict',w.verdict);
+    c.appendChild(v);
+  }
+
+  // footer: action buttons on their own row, full width
   const hasHistory = (w.steps&&w.steps.length) || w.currentStep;
   if(hasHistory){
-    const b=el('button','steps-btn','⧗ steps'+((w.steps&&w.steps.length)?(' ('+w.steps.length+')'):''));
+    const foot = el('div','foot');
+    const b=el('button','steps-btn','⧗ pipeline'+((w.steps&&w.steps.length)?(' ('+w.steps.length+')'):''));
     b.onclick=()=>openStepsModal(w); foot.appendChild(b);
+    c.appendChild(foot);
   }
-  if(foot.childNodes.length) c.appendChild(foot);
   return c;
 }
 
