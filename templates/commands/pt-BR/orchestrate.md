@@ -123,10 +123,57 @@ Respeite `parallelism.maxWorkers` e `maxPerRepository` (a decomposição por cam
 para o `maxPerRepository`). Se exceder, faça lotes e avise — nunca descarte um repo/camada
 silenciosamente.
 
-Renderize o grafo como uma tabela curta (id, archetype, repo, dependsOn) e **peça
-aprovação do usuário** antes de spawnar qualquer coisa.
+A tabela do grafo (id, archetype, repo, dependsOn) é o **ponto de partida**, não a lista
+final: na orquestração viva (Passo 4b) o grafo cresce conforme o trabalho revela necessidade.
 
-## Passo 5 — Compilar um Contrato de Contexto por nó
+## Passo 4b — Planejamento detalhado primeiro (agente planner) + grafo VIVO
+
+Não pré-compute todos os workers de uma vez com objetivos de uma frase (isso deixa o agente
+"cru", re-planejando tudo). Em vez disso, o `/orchestrate` é uma **semente**:
+
+1. **Spawne um agente `planner`** (arquétipo em `agents/planner.md`) — dependsOn nenhum. Ele
+   faz o **plano técnico detalhado**, alimentado pelo Perfil Técnico (Passo 3b), e o grava
+   em `.sessions/<ISSUE-ID>/execution-plan.md`, no espírito do antigo `plan.md`:
+   - **Abordagem técnica** e decisões (ecoando a arquitetura das metaspecs).
+   - **Contratos/APIs** — endpoints, tipos, eventos, campos (nomes reais; produtor/consumidor).
+   - **Estrutura de arquivos por repo** — arquivos a criar/modificar (caminho + o que muda).
+   - **Estratégia de testes** por repo, mapeada aos critérios de aceite.
+   - **Riscos** e **ordem de execução**.
+   - E, o principal: **quais workers criar** (papel, repo/camada, brief detalhado, deps).
+2. **Apresente o plano do planner e peça aprovação** — este é o seu ponto de controle
+   (como era aprovar o `plan.md`).
+3. **Spawne a primeira leva de workers** que o planner definiu.
+
+### Grafo vivo (totalmente dinâmico)
+A partir daí, o grafo é **vivo**: qualquer agente pode **gerar os próximos workers** quando
+o trabalho revela a necessidade (um implementer descobre que falta um serviço → solicita um
+worker novo; um integrator acha divergência → solicita um fix). Ao gerar um worker novo:
+- crie o `workers/<id>.json` (status `pending`, com brief detalhado) e ligue as `dependsOn`;
+- o dashboard mostra o worker **aparecendo ao vivo**.
+
+**Controle dinâmico** (não pare a cada worker): gere automaticamente enquanto estiver
+**dentro do padrão** (dentro do escopo do plano aprovado, dentro de `maxWorkers`, sem risco
+novo). **PARE e pergunte ao usuário — mostrando os bloqueios** — quando fugir do padrão:
+fora do escopo do plano, risco alto/novo (migração, segurança, breaking change não previsto),
+ambiguidade sem resposta na spec, ou um achado bloqueante de reviewer. Nunca chute nesses casos.
+
+## Passo 5 — Compilar um Contrato de Contexto por nó (com brief detalhado)
+
+Cada worker (definido pelo planner ou gerado ao vivo) recebe, além do contrato, um
+**brief recortado do plano** — a fatia que é dele, densa, **não uma frase**. É isso que faz
+o agente já nascer sabendo o que fazer. O `objective` de cada worker deve conter:
+
+- **O que fazer** — a mudança concreta (não "implemente o áudio", e sim "adicionar
+  `resolveIofAmount` em X; trocar rota Y→Z em W; parsear o novo envelope").
+- **Arquivos-alvo** — os arquivos daquele worker (caminho + o que muda).
+- **Contratos que ele produz/consome** — o pedaço de API/tipo que conecta com outros workers.
+- **Testes esperados** — os casos concretos que ele deve cobrir.
+- **Depende de / entrega para** — o que espera de outro worker e o que entrega.
+
+Mantenha o brief **recortado** (só a parte do worker) — não cole o plano inteiro em todos
+(quebraria `select-do-not-dump`). Planeja-se fundo uma vez; cada agente recebe a sua fatia rica.
+
+### Formato do contrato
 
 Para cada worker, monte o contrato que será colado no prompt do subagente.
 Veja `agents/CONTEXT-CONTRACT.md` para o formato exato. Em resumo:

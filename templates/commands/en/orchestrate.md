@@ -121,10 +121,57 @@ lens must carry the real metaspec rules.
 Respect `parallelism.maxWorkers` and `maxPerRepository` (layer decomposition counts toward
 `maxPerRepository`). If you exceed it, batch and say so — never silently drop a repo/layer.
 
-Render the graph as a short table (id, archetype, repo, dependsOn) and **get user approval**
-before spawning anything.
+The graph table (id, archetype, repo, dependsOn) is the **starting point**, not the final
+list: in live orchestration (Step 4b) the graph grows as work reveals the need.
 
-## Step 5 — Compile a Context Contract per node
+## Step 4b — Detailed planning first (planner agent) + LIVE graph
+
+Do NOT pre-compute all workers up front with one-line objectives (that leaves agents "raw",
+re-planning everything). Instead, `/orchestrate` is a **seed**:
+
+1. **Spawn a `planner` agent** (archetype in `agents/planner.md`) — dependsOn none. It writes
+   the **detailed technical plan**, fed by the Technical Profile (Step 3b), into
+   `.sessions/<ISSUE-ID>/execution-plan.md`, in the spirit of the old `plan.md`:
+   - **Technical approach** and decisions (echoing the metaspec architecture).
+   - **Contracts/APIs** — endpoints, types, events, fields (real names; producer/consumer).
+   - **Per-repo file structure** — files to create/modify (path + what changes).
+   - **Testing strategy** per repo, mapped to acceptance criteria.
+   - **Risks** and **execution order**.
+   - And crucially: **which workers to create** (role, repo/layer, detailed brief, deps).
+2. **Present the planner's plan and get approval** — this is your control point (like
+   approving the old `plan.md`).
+3. **Spawn the first wave of workers** the planner defined.
+
+### Live graph (fully dynamic)
+From there the graph is **alive**: any agent may **spawn the next workers** when work reveals
+the need (an implementer finds a missing service → requests a new worker; an integrator finds
+a mismatch → requests a fix). When generating a new worker:
+- create `workers/<id>.json` (status `pending`, with a detailed brief) and wire its `dependsOn`;
+- the dashboard shows the worker **appearing live**.
+
+**Dynamic control** (don't stop for every worker): auto-generate while **within the pattern**
+(inside the approved plan's scope, within `maxWorkers`, no new risk). **STOP and ask the user
+— showing the blockers** — when it goes off-pattern: outside the plan's scope, high/new risk
+(unplanned migration, security, breaking change), ambiguity the spec doesn't answer, or a
+reviewer's blocking finding. Never guess in those cases.
+
+## Step 5 — Compile a Context Contract per node (with a detailed brief)
+
+Each worker (defined by the planner or spawned live) gets, besides the contract, a
+**brief cut from the plan** — its slice, dense, **not a one-liner**. That's what makes the
+agent start knowing what to do. Each worker's `objective` must contain:
+
+- **What to do** — the concrete change (not "implement audio", but "add `resolveIofAmount`
+  in X; swap route Y→Z in W; parse the new envelope").
+- **Target files** — that worker's files (path + what changes).
+- **Contracts it produces/consumes** — the API/type slice that connects to other workers.
+- **Expected tests** — the concrete cases it must cover.
+- **Depends on / delivers to** — what it expects from another worker and what it hands off.
+
+Keep the brief **scoped** (only the worker's part) — don't paste the whole plan into every
+agent (breaks `select-do-not-dump`). Plan deep once; each agent gets its rich slice.
+
+### Contract format
 
 For each worker, build the contract that will be pasted into its subagent prompt.
 See `agents/CONTEXT-CONTRACT.md` for the exact shape. In short:

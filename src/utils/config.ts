@@ -82,6 +82,8 @@ export const DEFAULT_ARCHETYPES = [
   'integrator',
   'conflict-resolver',
 ];
+// note: `planner` runs first in live orchestration — it writes the detailed plan and
+// defines the workers; the graph then grows dynamically as agents reveal new work.
 
 export const DEFAULT_RISK_SIGNALS = [
   'migration',
