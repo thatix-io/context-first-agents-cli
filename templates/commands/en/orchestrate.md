@@ -59,7 +59,28 @@ Otherwise:
 
 State the classification and the reason explicitly before continuing.
 
-## Step 4 — Build the execution graph (DAG)
+## Step 3b — Distill the Technical Profile from the metaspecs (required for code)
+
+Before building the graph, **consult the technical indexes** (the `/warm-up` Context Map +
+`orchestration.indexes` + the impacted repos' `context[]`) and distill a **Technical
+Profile** of what the metaspecs require. Invent nothing — only what the spec states.
+Extract, when present:
+
+- **Stack + idioms**: languages/frameworks and required conventions (e.g. "Vue3/Nuxt
+  composition API", "NestJS + Mongoose", "ESM with `.js` imports", "pnpm/Jest").
+- **Architecture**: the required pattern and its dependency rules (e.g. "Clean Architecture:
+  `domain` pure, no framework; `application` via ports; `infrastructure` implements ports").
+- **Detectable anti-patterns**: concrete prohibitions and how to detect them (e.g. "`domain`
+  must not import `mongoose`/`@nestjs/*`", "no hardcoded values where a design token exists").
+- **Design system / tokens**: if the metaspec defines a DS (e.g. `DESIGN_TOKENS_CONTRACT.md`),
+  record the visual/token conformance rules to follow and validate.
+- **Quality/security rules**: LGPD/PII, API contracts, mandatory tests.
+
+This Technical Profile feeds **everything downstream**: the shape of the graph (Step 4),
+each worker's guidance (Step 5), and which reviewers to create. Cite the specs consulted
+(name + version/section) — that's the audit trail.
+
+## Step 4 — Build the execution graph (DAG) — architecture-aware
 
 Instantiate workers from `orchestration.archetypes`. Each worker node has:
 `{ id, name, archetype, objective, repository, dependsOn[], contextHints[] }`.
@@ -67,25 +88,38 @@ Instantiate workers from `orchestration.archetypes`. Each worker node has:
 Besides the short `id` (`W1`, `W2`…), give each worker a **descriptive `name` =
 role + target**, derived from the archetype + repo/objective. Suggested prefixes:
 `impl:`, `integrate:`, `review:`, `test:`, `research:`, `plan:`. Examples:
-`impl:front-audio`, `impl:back-api`, `integrate:api↔ui`, `review:security`, `test:front`.
+`impl:front-audio`, `impl:back-domain`, `review:arch`, `review:design-system`, `test:front`.
 The dashboard displays this `name` (the `id` stays internal).
 
-- **simple**
-  - `W1 implementer` on the single impacted repo
-  - `W2 reviewer` (dependsOn W1) — verify against the normative spec
+### Base by complexity
+- **simple**: `implementer` on the single impacted repo → `reviewer` (dependsOn) vs. the spec.
+- **medium**: one `implementer` per impacted repo (parallel) → `integrator` → `tester`.
+- **complex** = medium + adversarial `reviewer` (dependsOn integrator).
 
-- **medium**
-  - one `implementer` per impacted repo (these run in **parallel**, no deps between them)
-  - `integrator` (dependsOn all implementers) — check cross-repo contracts/consistency
-  - `tester` (dependsOn integrator) — run each repo's `testCommand`
+### Architectural decomposition (optional — you decide if it's worth it)
+Using the **Technical Profile**, judge whether to **split a repo into several workers**
+following the metaspec's architecture, instead of one monolithic implementer:
+- e.g. Clean Architecture: `impl:domain` → `impl:application` → (`impl:infra` ∥
+  `impl:presentation`), honoring "dependencies point inward".
+- e.g. by module/bounded-context/feature when the spec is organized that way.
 
-- **complex** = medium, plus:
-  - `reviewer` (dependsOn integrator) — **adversarial** review of business rules,
-    security, migrations, and hidden assumptions. Prefer a specialized reviewer archetype
-    if the risk signals point at one (e.g. data, integrations, tenancy).
+**Judgment, not a fixed rule**: only decompose if the task is large/risky enough that the
+parallelism and isolation pay off. Small task → one implementer per repo (layer
+decomposition happens inside the worker). State why you decomposed (or not).
 
-Respect `parallelism.maxWorkers` and `maxPerRepository`. If impacted repos exceed the
-cap, batch them and say so — never silently drop a repo.
+### Reviewers derived from the metaspecs
+Create the reviewers/validators the **Technical Profile** justifies — each carrying the
+concrete rules extracted from the spec (not generic):
+- Profile has architecture/anti-patterns → `review:arch` (checks layers, dependencies, the
+  detectable anti-patterns).
+- Profile has a design system/tokens and the front was touched → `review:design-system`
+  (validates token/component conformance).
+- Profile has LGPD/security/contracts → `review:security` / `review:contract`.
+With few rules you may consolidate into a single reviewer with multiple lenses — but each
+lens must carry the real metaspec rules.
+
+Respect `parallelism.maxWorkers` and `maxPerRepository` (layer decomposition counts toward
+`maxPerRepository`). If you exceed it, batch and say so — never silently drop a repo/layer.
 
 Render the graph as a short table (id, archetype, repo, dependsOn) and **get user approval**
 before spawning anything.
@@ -97,10 +131,22 @@ See `agents/CONTEXT-CONTRACT.md` for the exact shape. In short:
 
 - **read**: `orchestration.indexes` + that repo's `context[]` (only files that exist)
 - **mayDiscover**: references reachable from the indexes; repo files the task needs
+- **techProfile**: this worker's **specific technical guidance**, extracted from the
+  Technical Profile (Step 3b) and scoped to it. This is what specializes the agent:
+  - implementer → stack/idioms + the architecture rule for ITS layer/repo (e.g. a `domain`
+    worker gets "pure, no framework, don't import mongoose/@nestjs"; a front worker gets
+    "use design-system tokens, no hardcoded values"). Point at the exact indexes to consult
+    (e.g. `technical/ARCHITECTURE.md`, `DESIGN_TOKENS_CONTRACT.md`).
+  - reviewer/validator → the **concrete checklist** derived from the spec (anti-patterns to
+    detect, tokens to check, security rules) — not "review well", but "verify X, Y, Z".
 - **mustNotAssume**: unstated business rules; unindexed external contracts; anything not in specs
 - **writeBoundary**: only that repo's worktree (or session artifacts for integrator/tester)
 - **limits**: `contextPolicy` (default `select-do-not-dump`), `maxFilesPerWorker`
 - **return**: summary, changes, evidence, tests, unresolved questions, confidence
+
+> The `techProfile` is what makes an `implementer` produce **idiomatic, architecture-conformant**
+> code, and a `reviewer` review **in the real technology's language** — all derived from the
+> metaspecs, without the package knowing the stack in advance.
 
 ## Step 5b — Prepare the session worktrees (via git, not Node)
 

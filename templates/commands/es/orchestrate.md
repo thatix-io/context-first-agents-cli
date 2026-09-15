@@ -60,7 +60,28 @@ En caso contrario:
 
 Declara la clasificación y el motivo explícitamente antes de continuar.
 
-## Paso 4 — Construir el grafo de ejecución (DAG)
+## Paso 3b — Destilar el Perfil Técnico de las metaspecs (obligatorio para código)
+
+Antes de construir el grafo, **consulta los índices técnicos** (el Mapa de Contexto del
+`/warm-up` + `orchestration.indexes` + el `context[]` de los repos impactados) y destila un
+**Perfil Técnico** de lo que las metaspecs exigen. No inventes nada — solo lo que la spec
+dice. Extrae, cuando exista:
+
+- **Stack + idioms**: lenguajes/frameworks y convenciones obligatorias (ej.: "Vue3/Nuxt
+  composition API", "NestJS + Mongoose", "ESM con imports `.js`", "pnpm/Jest").
+- **Arquitectura**: el patrón exigido y sus reglas de dependencia (ej.: "Clean Architecture:
+  `domain` puro sin framework; `application` vía ports; `infrastructure` implementa ports").
+- **Anti-patterns detectables**: prohibiciones concretas y cómo detectarlas (ej.: "`domain`
+  no importa `mongoose`/`@nestjs/*`", "sin valores hardcodeados donde hay design token").
+- **Design system / tokens**: si la metaspec define un DS (ej.: `DESIGN_TOKENS_CONTRACT.md`),
+  registra las reglas de conformidad visual/tokens a seguir y validar.
+- **Reglas de calidad/seguridad**: LGPD/PII, contratos de API, tests obligatorios.
+
+Este Perfil Técnico alimenta **todo lo que sigue**: la forma del grafo (Paso 4), las
+orientaciones de cada worker (Paso 5) y qué reviewers crear. Cita las specs consultadas
+(nombre + versión/sección) — esa es la traza de auditoría.
+
+## Paso 4 — Construir el grafo de ejecución (DAG) — consciente de la arquitectura
 
 Instancia workers desde `orchestration.archetypes`. Cada nodo tiene:
 `{ id, name, archetype, objective, repository, dependsOn[], contextHints[] }`.
@@ -68,25 +89,39 @@ Instancia workers desde `orchestration.archetypes`. Cada nodo tiene:
 Además del `id` corto (`W1`, `W2`…), dale a cada worker un **`name` descriptivo =
 rol + objetivo**, derivado del arquetipo + repo/objetivo. Prefijos sugeridos:
 `impl:`, `integrate:`, `review:`, `test:`, `research:`, `plan:`. Ejemplos:
-`impl:front-audio`, `impl:back-api`, `integrate:api↔ui`, `review:security`, `test:front`.
+`impl:front-audio`, `impl:back-domain`, `review:arch`, `review:design-system`, `test:front`.
 Es ese `name` el que aparece en el dashboard (el `id` queda interno).
 
-- **simple**
-  - `W1 implementer` en el único repo impactado
-  - `W2 reviewer` (dependsOn W1) — verificar contra la spec normativa
+### Base por complejidad
+- **simple**: `implementer` en el único repo impactado → `reviewer` (dependsOn) vs. la spec.
+- **medium**: un `implementer` por repo impactado (paralelos) → `integrator` → `tester`.
+- **complex** = medium + `reviewer` adversarial (dependsOn integrator).
 
-- **medium**
-  - un `implementer` por repo impactado (corren en **paralelo**, sin deps entre sí)
-  - `integrator` (dependsOn todos los implementers) — chequear contratos/consistencia cross-repo
-  - `tester` (dependsOn integrator) — correr el `testCommand` de cada repo
+### Descomposición arquitectural (opcional — tú decides si vale la pena)
+Usando el **Perfil Técnico**, juzga si conviene **partir un repo en varios workers**
+siguiendo la arquitectura de las metaspecs, en vez de un implementer monolítico:
+- ej. Clean Architecture: `impl:domain` → `impl:application` → (`impl:infra` ∥
+  `impl:presentation`), respetando "las dependencias apuntan hacia adentro".
+- ej. por módulo/bounded-context/feature cuando la spec se organiza así.
 
-- **complex** = medium, más:
-  - `reviewer` (dependsOn integrator) — review **adversarial** de reglas de negocio,
-    seguridad, migraciones y premisas ocultas. Prefiere un reviewer especializado si los
-    riskSignals lo indican (ej.: datos, integraciones, multi-tenant).
+**Juicio, no regla fija**: solo descompón si la task es grande/riesgosa lo suficiente para
+que el paralelismo y el aislamiento valgan la pena. Task pequeña → un implementer por repo
+(la descomposición por capa ocurre dentro del worker). Declara por qué descompusiste (o no).
 
-Respeta `parallelism.maxWorkers` y `maxPerRepository`. Si los repos impactados exceden el
-límite, hazlos por lotes y avísalo — nunca descartes un repo silenciosamente.
+### Reviewers derivados de las metaspecs
+Crea los reviewers/validadores que el **Perfil Técnico** justifique — cada uno con las
+reglas concretas extraídas de la spec (no genéricos):
+- Perfil tiene arquitectura/anti-patterns → `review:arch` (verifica capas, dependencias, los
+  anti-patterns detectables).
+- Perfil tiene design system/tokens y el front fue tocado → `review:design-system` (valida
+  conformidad de tokens/componentes).
+- Perfil tiene LGPD/seguridad/contratos → `review:security` / `review:contract`.
+Con pocas reglas puedes consolidar en un único reviewer con varias lentes — pero cada lente
+debe cargar las reglas reales de la metaspec.
+
+Respeta `parallelism.maxWorkers` y `maxPerRepository` (la descomposición por capa cuenta
+para `maxPerRepository`). Si excedes, hazlo por lotes y avísalo — nunca descartes un
+repo/capa silenciosamente.
 
 Renderiza el grafo como una tabla corta (id, archetype, repo, dependsOn) y **pide
 aprobación del usuario** antes de spawnear cualquier cosa.
@@ -98,10 +133,22 @@ Ver `agents/CONTEXT-CONTRACT.md` para el formato exacto. En resumen:
 
 - **read**: `orchestration.indexes` + el `context[]` de ese repo (sólo archivos que existen)
 - **mayDiscover**: referencias alcanzables desde los índices; archivos del repo que la task exige
+- **techProfile**: las **orientaciones técnicas específicas** de este worker, extraídas del
+  Perfil Técnico (Paso 3b) y acotadas a su alcance. Esto es lo que especializa al agente:
+  - implementer → stack/idioms + la regla de arquitectura de SU capa/repo (ej.: el worker de
+    `domain` recibe "puro, sin framework, sin importar mongoose/@nestjs"; el worker de front
+    recibe "usar tokens del design system, sin valores hardcodeados"). Apunta los índices
+    exactos a consultar (ej.: `technical/ARCHITECTURE.md`, `DESIGN_TOKENS_CONTRACT.md`).
+  - reviewer/validador → la **checklist concreta** derivada de la spec (anti-patterns a
+    detectar, tokens a verificar, reglas de seguridad) — no "revisa bien", sino "verifica X, Y, Z".
 - **mustNotAssume**: reglas de negocio no dichas; contratos externos no indexados; nada fuera de la spec
 - **writeBoundary**: sólo el worktree de ese repo (o artefactos de la sesión para integrator/tester)
 - **limits**: `contextPolicy` (por defecto `select-do-not-dump`), `maxFilesPerWorker`
 - **return**: summary, changes, evidence, tests, unresolved, confidence
+
+> El `techProfile` es lo que hace que un `implementer` produzca código **idiomático y
+> conforme** a la arquitectura, y que un `reviewer` revise **en el lenguaje de la tecnología
+> real** — todo derivado de las metaspecs, sin que el paquete conozca el stack de antemano.
 
 ## Paso 5b — Preparar los worktrees de la sesión (vía git, no Node)
 
