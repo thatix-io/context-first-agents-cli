@@ -61,3 +61,34 @@ contexto de cada agente **pequeño, acotado y auditable** — el núcleo de la a
 ### confidence
 <low | medium | high> + una línea de por qué
 ```
+
+## Modo workflow (Motor B — `orchestrate-execute`)
+
+Dentro del workflow `orchestrate-execute` estas reglas vienen **en tu prompt** (no necesitas abrir
+este archivo); quedan registradas aquí como referencia y para el Motor A.
+
+### 1. Estado — un comando corto por hito
+Tu prompt trae tres comandos listos para tu `workers/<id>.json` (el dashboard lo lee en vivo):
+`… start '<meta>' "<primer paso>"`, `… step "<qué ahora>"`, `… finish done|blocked [VEREDICTO]`.
+Úsalos en **3–5 hitos**, no en cada acción. Nunca escribas `state.json` ni el archivo de otro
+worker — el orquestador es su único escritor.
+
+### 2. Reporte en disco, retorno estructurado corto
+- Antes de retornar, escribe tu **reporte completo** (summary / changes / evidence / tests /
+  unresolved / confidence, más findings) en la ruta de reporte de tu prompt (`workers/<id>.md`).
+- Luego devuelve el objeto estructurado (la llamada de herramienta impone el schema) con un
+  **summary corto (≤ 3 líneas)** — el contexto del orquestador es el más caro; el detalle queda en el reporte.
+- `status`: `done` | `blocked` — **ante la duda, `blocked`, nunca un `done` inventado**.
+- `verdict` (gates): `PASS`/`BLOCKED` (reviewer), `GREEN`/`RED` (tester), `CONSISTENT`/`MISMATCH` (integrator).
+- `findings[]` (gates): `severity` (`blocking` | `should-fix` | `nit`), **`repository` (el id del
+  repo dueño de la corrección — obligatorio en hallazgos bloqueantes; así el loop de corrección lo enruta)**,
+  `file`, `line`, `description`, `fix`.
+- `commits[]` (implementers): los SHAs que creaste — las re-verificaciones revisan sólo esos.
+- `spawn[]` (workers no-gate, opcional): `name`, `archetype`, `repository`, `dependsOn`, `brief`,
+  flags `inScope` / `newRisk` honestas, `reason`. Las propuestas dentro del alcance y sin riesgo
+  corren solas, el resto va al usuario. Propón en vez de hacer trabajo fuera de alcance tú mismo.
+
+### 3. Salida de comandos concisa (en ambos motores)
+Corre tests/builds con reporters silenciosos o de resumen; manda la salida completa a un log en
+`<sessionDir>/logs/` y trae a tu contexto sólo el resumen y los fallos
+(ej.: `tail -n 40`, `grep -E "FAIL|Error"`). Los fallos vienen completos — sólo se corta el ruido.

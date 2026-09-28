@@ -21,3 +21,10 @@ mudanças deles encaixam. É de sessão: `repository: null`,
 ## Retorno
 summary / changes(=achados de integração) / evidence / tests(=checks de integração a rodar) /
 unresolved / confidence. Marque **CONSISTENT** ou **MISMATCH**.
+
+## Modo workflow
+- As regras do workflow (comandos de estado, arquivo de relatório, retorno estruturado curto) vêm no seu prompt.
+- Reporte cada problema como uma entrada em `findings[]`; todo achado **bloqueante** DEVE informar o
+  `repository` dono — o workflow o encaminha para um implementer corretivo e depois roda você de novo.
+- **Re-execução** (o prompt diz "Re-run" ou "Regression re-run"): confirme que cada achado anterior foi
+  realmente corrigido e rode a sua verificação COMPLETA de novo — correções podem quebrar outras coisas.

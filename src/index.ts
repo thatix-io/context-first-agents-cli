@@ -22,14 +22,14 @@ program
 program
   .command('init')
   .description('Add Context-First Agents command templates to an existing orchestrator')
-  .option('-l, --lang <lang>', 'Command language (en, pt-BR)', 'en')
+  .option('-l, --lang <lang>', 'Command language (en, es, pt-BR)', 'en')
   .option('-f, --force', 'Overwrite existing command files')
   .action(initCommand);
 
 program
   .command('create:orchestrator [name]')
   .description('Create a new orchestrator directory (context-manifest.json + .md commands)')
-  .option('-l, --lang <lang>', 'Command language (en, pt-BR)', 'en')
+  .option('-l, --lang <lang>', 'Command language (en, es, pt-BR)', 'en')
   .option('-p, --project <name>', 'Project name (non-interactive)')
   .option('-d, --description <text>', 'Project description (non-interactive)')
   .option('-y, --yes', 'Skip prompts and use defaults/flags')
@@ -43,7 +43,7 @@ program
 program
   .command('update:commands')
   .description('Update the agent command templates in an existing orchestrator')
-  .option('-l, --lang <lang>', 'Command language (en, pt-BR)', 'en')
+  .option('-l, --lang <lang>', 'Command language (en, es, pt-BR)', 'en')
   .action(updateCommandsCommand);
 
 program

@@ -31,6 +31,12 @@ tools (like `context-agents dashboard`) can render live progress. Human-readable
 
 - `status`: `planned` | `running` | `blocked` | `done`.
 - `waves`: array of arrays of worker ids, in execution order.
+- `engine` (optional): `workflow` (Engine B — the `orchestrate-execute` workflow) or `task`
+  (Engine A fallback — Task-tool waves).
+- `runs` (optional, Engine B): `[{ "runId": "wf_…", "startedAt": "…", "status": "…" }]`, one per
+  workflow run of this session — the last `runId` is what `resumeFromRunId` uses.
+
+**Single writer:** only the orchestrator (the `/orchestrate` main loop) writes `state.json`.
 
 ## `workers/<id>.json`
 
@@ -64,6 +70,22 @@ tools (like `context-agents dashboard`) can render live progress. Human-readable
   step modal. `currentStep` should equal the last entry of `steps`.
 - `verdict` (optional): for reviewer/tester/integrator, e.g. `PASS` | `BLOCKED` |
   `GREEN` | `RED` | `CONSISTENT` | `MISMATCH`.
+
+### Who writes `workers/<id>.json`
+- **Engine B (workflow)**: the orchestrator writes every planned worker as `pending` before the
+  run; from then on **each agent writes its own file** (running → steps → done/blocked) with the
+  helper `.claude/bin/worker-state.mjs` (`start` / `step` / `finish`, atomic writes), plus its full
+  report `workers/<id>.md`. The
+  workflow also creates extra agents, each with its own file:
+  | id pattern | what it is |
+  |---|---|
+  | `W4.v1` | adversarial verifier of W4's blocking findings (round 1) |
+  | `W4.fix1.<repo>` | corrective implementer for W4's findings in `<repo>` (round 1) |
+  | `W4.r2` | W4 re-run after the fixes (round 2) |
+  | `W5.reg1` | regression re-run of W5 (a later fix changed code W5 had already validated) |
+  | `D1`, `D2`… | workers spawned live (proposed by a worker, inside the approved pattern) |
+  After the run, the orchestrator reconciles the files with the workflow's result.
+- **Engine A (task)**: the orchestrator writes all files, following the protocol below.
 
 ## Update protocol (for `/orchestrate`)
 

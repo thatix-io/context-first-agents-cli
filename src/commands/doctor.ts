@@ -41,6 +41,22 @@ export async function doctorCommand(): Promise<void> {
     warnings++;
   }
 
+  // Execution engine (Engine B): the workflow script /orchestrate runs via the Workflow tool.
+  const engineFiles = ['workflows/orchestrate-execute.js', 'bin/worker-state.mjs'];
+  const engineMissing: string[] = [];
+  for (const f of engineFiles) {
+    if (!(await pathExists(path.join(cwd, '.claude', f)))) engineMissing.push(f);
+  }
+  if (!engineMissing.length) {
+    console.log(chalk.green('✓ Workflow engine installed (.claude/workflows/orchestrate-execute.js + bin/worker-state.mjs)'));
+  } else if (engineMissing.length === 1 && engineMissing[0].startsWith('bin/')) {
+    console.log(chalk.yellow('! Worker state helper missing (.claude/bin/worker-state.mjs) — agents will edit state JSON by hand. Run `context-agents update:commands`'));
+    warnings++;
+  } else {
+    console.log(chalk.yellow('! Workflow engine missing — /orchestrate will fall back to Task-tool waves. Run `context-agents update:commands`'));
+    warnings++;
+  }
+
   // Orchestration block
   const orch = manifest.orchestration;
   if (!orch?.riskSignals?.length) {

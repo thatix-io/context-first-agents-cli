@@ -39,3 +39,12 @@ Se o `techProfile` apontar um índice (ex.: `ARCHITECTURE.md`, `DESIGN_TOKENS_CO
 ## Retorno
 summary / changes(=lista de achados) / evidence / tests(=o que você testaria) / unresolved / confidence
 Marque claramente **PASS** ou **BLOCKED** (qualquer achado blocking ⇒ BLOCKED).
+
+## Modo workflow
+- As regras do workflow (comandos de estado, arquivo de relatório, retorno estruturado curto) vêm no seu prompt.
+- Reporte cada problema como uma entrada em `findings[]`; todo achado **bloqueante** DEVE informar o
+  `repository` dono — o workflow o encaminha para um implementer corretivo e depois roda você de novo.
+- **Re-execução** (o prompt diz "Re-run" ou "Regression re-run"): confirme que cada achado anterior foi
+  realmente corrigido e rode a sua verificação COMPLETA de novo — correções podem quebrar outras coisas.
+- Seus achados bloqueantes passam por verificação adversarial antes de qualquer correção: cite
+  arquivo/linha e a regra da spec para que sobrevivam; achados sem fundamento são descartados.

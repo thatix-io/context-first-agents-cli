@@ -39,3 +39,12 @@ Si el `techProfile` apunta a un índice (ej.: `ARCHITECTURE.md`, `DESIGN_TOKENS_
 ## Retorno
 summary / changes(=lista de hallazgos) / evidence / tests(=qué testearías) / unresolved / confidence
 Marca claramente **PASS** o **BLOCKED** (cualquier hallazgo blocking ⇒ BLOCKED).
+
+## Modo workflow
+- Las reglas del workflow (comandos de estado, archivo de reporte, retorno estructurado corto) vienen en tu prompt.
+- Reporta cada problema como una entrada en `findings[]`; todo hallazgo **bloqueante** DEBE indicar el
+  `repository` dueño — el workflow lo enruta a un implementer correctivo y luego te vuelve a correr.
+- **Re-ejecución** (el prompt dice "Re-run" o "Regression re-run"): confirma que cada hallazgo anterior
+  está realmente corregido y corre tu verificación COMPLETA de nuevo — las correcciones pueden romper otras cosas.
+- Tus hallazgos bloqueantes pasan por verificación adversarial antes de cualquier corrección: cita
+  archivo/línea y la regla de la spec para que sobrevivan; los hallazgos sin fundamento se descartan.

@@ -39,3 +39,12 @@ If the `techProfile` points at an index (e.g. `ARCHITECTURE.md`, `DESIGN_TOKENS_
 ## Return
 summary / changes(=findings list) / evidence / tests(=what you'd test) / unresolved / confidence
 Mark clearly whether the result is **PASS** or **BLOCKED** (any blocking finding ⇒ BLOCKED).
+
+## Workflow mode
+- The workflow rules (state commands, report file, short structured return) come in your prompt.
+- Report every problem as a `findings[]` entry; each **blocking** finding MUST name the owning
+  `repository` — the workflow routes it to a corrective implementer and then re-runs you.
+- **Re-run** (prompt says "Re-run" or "Regression re-run"): confirm each previous finding is really
+  fixed, then run your FULL check again — fixes can break other things.
+- Your blocking findings are adversarially verified before any fix: cite file/line and the spec
+  rule so they survive; unfounded findings are dropped.

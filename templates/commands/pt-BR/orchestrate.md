@@ -15,7 +15,14 @@ deriva automaticamente. `/plan` e `/work` podem continuar existindo como escape 
 
 - ✅ Leia `context-manifest.json` + `ai.properties.md` do orquestrador.
 - ✅ O contexto do próprio Orquestrador fica LEVE: você coordena, não implementa.
-- ✅ Cada unidade de trabalho é feita por um **subagente (Task tool)** com um **contrato de contexto isolado**.
+- ✅ Cada unidade de trabalho é feita por um **subagente** com um **contrato de contexto isolado**.
+- ✅ **A execução roda no Motor B — a ferramenta `Workflow`** (script `orchestrate-execute`): o DAG,
+  os loops de correção, o grafo vivo e os limites são garantidos por código, não pela sua memória.
+  **Invocar `/orchestrate` JÁ É o opt-in explícito do usuário para rodar esse workflow — não
+  pergunte de novo.** O Motor A (Task/Agent tool, onda a onda) é só o fallback quando a
+  ferramenta `Workflow` não existe neste ambiente (ver Passo 6).
+- ✅ Decisões ficam com o usuário, neste loop principal: aprovação do plano, bloqueios, spawns
+  fora do padrão. O workflow nunca chuta — ele encerra e devolve os bloqueios para você.
 - ✅ Nunca crie catálogo de agentes de domínio (nada de `frontend-agent`, `payments-agent`).
   Um worker é compilado na hora: `arquétipo + objetivo + repositório + contrato de contexto + ferramentas`.
 - ❌ Nunca despeje repositórios inteiros num subagente. Selecione, não despeje.
@@ -141,21 +148,23 @@ Não pré-compute todos os workers de uma vez com objetivos de uma frase (isso d
    - **Riscos** e **ordem de execução**.
    - E, o principal: **quais workers criar** (papel, repo/camada, brief detalhado, deps).
 2. **Apresente o plano do planner e peça aprovação** — este é o seu ponto de controle
-   (como era aprovar o `plan.md`).
-3. **Spawne a primeira leva de workers** que o planner definiu.
+   (como era aprovar o `plan.md`). Nada executa antes disso.
+3. Entregue o grafo aprovado ao motor de execução (Passo 6).
 
-### Grafo vivo (totalmente dinâmico)
-A partir daí, o grafo é **vivo**: qualquer agente pode **gerar os próximos workers** quando
-o trabalho revela a necessidade (um implementer descobre que falta um serviço → solicita um
-worker novo; um integrator acha divergência → solicita um fix). Ao gerar um worker novo:
-- crie o `workers/<id>.json` (status `pending`, com brief detalhado) e ligue as `dependsOn`;
-- o dashboard mostra o worker **aparecendo ao vivo**.
+### Grafo vivo (totalmente dinâmico, garantido pelo workflow)
+O grafo é **vivo**: qualquer worker pode **propor novos workers** quando o trabalho revela a
+necessidade (um implementer descobre que falta um serviço, um módulo auxiliar, um passo de
+migração). Workers não spawnam agentes eles mesmos — devolvem propostas em `spawn[]` com as
+flags `inScope` / `newRisk`, e o workflow aplica o **controle dinâmico**:
+- **dentro do padrão** (dentro do escopo do plano aprovado, dentro de `maxWorkers`, sem risco
+  novo) → o workflow cria o worker (`D1`, `D2`…), liga-o antes de tudo que depende de quem
+  propôs, e o executa — o dashboard mostra o worker **aparecendo ao vivo**;
+- **fora do padrão** (fora do escopo do plano, risco alto/novo como migração, segurança ou
+  breaking change não previsto, `maxWorkers` atingido) → a proposta **não** é executada; volta
+  em `needsHuman[]` e você **PARA e pergunta ao usuário** (Passo 6, "Tratar o resultado").
 
-**Controle dinâmico** (não pare a cada worker): gere automaticamente enquanto estiver
-**dentro do padrão** (dentro do escopo do plano aprovado, dentro de `maxWorkers`, sem risco
-novo). **PARE e pergunte ao usuário — mostrando os bloqueios** — quando fugir do padrão:
-fora do escopo do plano, risco alto/novo (migração, segurança, breaking change não previsto),
-ambiguidade sem resposta na spec, ou um achado bloqueante de reviewer. Nunca chute nesses casos.
+Gates nunca propõem workers: reviewer/tester/integrator reportam `findings[]`, e o **loop de
+correção** do workflow cria os implementers corretivos (Passo 6).
 
 ## Passo 5 — Compilar um Contrato de Contexto por nó (com brief detalhado)
 
@@ -240,20 +249,100 @@ Depois disso, o `writeBoundary` de cada agente (`.sessions/<ISSUE-ID>/<repo>/`) 
 ## Passo 5c — Gravar o estado inicial (para o dashboard)
 
 Grave o estado legível por máquina em `.sessions/<ISSUE-ID>/` (formato em
-`SESSION-STATE.md` do orquestrador). Isto alimenta o `context-agents dashboard`.
+`SESSION-STATE.md` do orquestrador). Isto alimenta o `context-agents dashboard`. **Você é o
+único escritor do `state.json`**; cada worker grava apenas o seu próprio `workers/<id>.json`.
 
-1. `state.json`: `{ issueId, title, complexity, status:"planned", createdAt, repos, waves }`
-   (`waves` = as ondas do Passo 4; `title` = o título humano da tarefa vindo da spec, para
-   o dashboard exibir "ISSUE-ID · título").
-2. `workers/<id>.json` para cada nó: `{ id, name, archetype, repository, objective,
+1. `state.json`: `{ issueId, title, complexity, status:"planned", engine, createdAt, repos, waves }`
+   (`engine` = `"workflow"` ou `"task"` conforme o Passo 6; `waves` = as ondas do Passo 4;
+   `title` = o título humano da tarefa vindo da spec, para o dashboard exibir "ISSUE-ID · título").
+2. `workers/<id>.json` para cada nó planejado: `{ id, name, archetype, repository, objective,
    dependsOn, status:"pending", currentStep:null, steps:[], startedAt:null,
-   finishedAt:null, verdict:null }` (inclua o `name` descritivo do Passo 4).
+   finishedAt:null, verdict:null }` (inclua o `name` descritivo do Passo 4) — o grafo inteiro
+   aparece no dashboard antes de qualquer execução.
 3. **Mova a task no gerenciador** — gatilho `work_started`: siga `agents/TASK-STATUS.md`
    (best-effort; se não houver task manager, ignore).
 
-Mantenha escritas pequenas e frequentes — o dashboard faz polling desses arquivos.
+## Passo 6 — Executar o grafo
 
-## Passo 6 — Spawnar os agentes efêmeros (Task tool)
+### Escolha do motor
+- **Motor B — Workflow (padrão).** Se a ferramenta `Workflow` estiver disponível neste ambiente,
+  use-a SEMPRE, em qualquer nível de complexidade. Isto não é uma proposta ao usuário: rodar
+  `/orchestrate` já é o opt-in.
+- **Motor A — Task/Agent tool (fallback).** Só quando a ferramenta `Workflow` não existir (ex.:
+  outra ferramenta de IA). Registre `engine:"task"` no `state.json` e siga o "Motor A" abaixo.
+
+Se o runtime do workflow avisar que o grafo passa do tamanho recomendado, diga ao usuário que ele
+pode aumentar em `/config` ("Dynamic workflow size") — nunca encolha o plano aprovado para caber.
+
+### Motor B — rodar o workflow `orchestrate-execute`
+
+1. **Compile os args** (objeto JSON — passe como objeto de verdade, não como string):
+   ```json
+   {
+     "issueId": "<ISSUE-ID>",
+     "sessionDir": "<caminho absoluto de .sessions/<ISSUE-ID>>",
+     "commandsDir": "<caminho absoluto de .claude/commands>",
+     "stateHelper": "<caminho absoluto de .claude/bin/worker-state.mjs>",
+     "maxWorkers": <orchestration.parallelism.maxWorkers>,
+     "maxFixRounds": 2,
+     "effort": <orchestration.agentEffort, se definido>,
+     "model": <orchestration.agentModel, se definido>,
+     "repos": [{ "id": "<repo>", "worktree": "<caminho absoluto do worktree>", "testCommand": "<cmd>" }],
+     "workers": [{
+       "id": "W1", "name": "impl:service-a", "archetype": "implementer",
+       "repository": "service-a", "dependsOn": [],
+       "brief": "<o brief denso do Passo 5>",
+       "contract": { "<o contrato de contexto compilado no Passo 5>": "..." }
+     }, {
+       "id": "W5", "name": "test:service-a", "archetype": "tester",
+       "repository": null, "scope": ["service-a"], "dependsOn": ["W3"], "brief": "...", "contract": {}
+     }]
+   }
+   ```
+   `repos` lista só os repos impactados (os worktrees do Passo 5b). **`scope`** (gates) = os repos
+   que um gate de sessão cobre — defina sempre que o gate cobrir só parte deles (ex.: `test:front`,
+   `review:design-system`): depois de um fix, só rodam de novo os gates cujo escopo o fix tocou.
+   Omitido → o gate cobre todos os repos impactados. Omita `effort`/`model` se o manifest não os
+   definir: por padrão o trabalho de julgamento herda a sessão e só o tester é reduzido.
+2. **Marque `state.json.status = "running"`** e chame a ferramenta:
+   `Workflow({ name: "orchestrate-execute", args: <o objeto acima> })`.
+   Se o nome não resolver, use
+   `Workflow({ scriptPath: "<caminho absoluto de .claude/workflows/orchestrate-execute.js>", args })`.
+   Registre o `runId` retornado em `state.json.runs[]`. O workflow roda em background — você é
+   notificado quando terminar; não faça polling.
+3. **O que o workflow garante** (você não reimplementa nada disso):
+   - **DAG sem barreira**: cada worker começa assim que AS SUAS dependências terminam; um
+     worker bloqueado só pula os seus dependentes, ramos independentes seguem.
+   - **Loops de correção em todo gate** (reviewer / tester / integrator): veredito reprovado
+     (`BLOCKED` / `RED` / `MISMATCH`) → implementers corretivos por repo dono → o gate roda de
+     novo, até `maxFixRounds`; depois disso para como bloqueado.
+   - **Verificação adversarial** dos achados bloqueantes de reviewer antes de alguém corrigir
+     (achados refutados são descartados; um achado sobrevive a menos que seja refutado com evidência).
+   - **Regressão com escopo**: um gate que passou antes de um fix posterior tocar um repo do seu
+     escopo roda de novo — limitado às mudanças do fix e aos testes dos repos tocados.
+   - **Grafo vivo** com o controle dinâmico do Passo 4b.
+   - **Instrumentação + relatórios em disco**: cada agente grava o próprio `workers/<id>.json`
+     (via o state helper) e o seu relatório completo `workers/<id>.md` (agentes extras recebem ids
+     como `W4.v1` verificação, `W4.fix1.<repo>` correção, `W4.r2` re-execução, `W5.reg1`
+     regressão, `D1` gerado ao vivo).
+4. **Tratar o resultado** — ele é **compacto de propósito** (`{ status, workers[], extraAgents[],
+   acceptedSpawns[], fixRounds[], needsHuman[] }`, cada worker com um resumo de até 3 linhas); os
+   relatórios completos são os arquivos `workers/<id>.md`. Abra um relatório só quando precisar do
+   detalhe (um bloqueio, um resumo que não se explica) — nunca carregue todos no seu contexto.
+   - Reconcilie cada `workers/<id>.json` com o status/veredito retornado (corrija qualquer
+     arquivo que um agente deixou inconsistente).
+   - `status: "done"` → `state.json.status = "done"` → Passo 6b.
+   - `status: "blocked"` → `state.json.status = "blocked"`, gatilho `blocked` (TASK-STATUS), e
+     **PARE: mostre ao usuário cada item de `needsHuman[]`** (workers bloqueados + seus
+     `unresolved`, achados não verificáveis, propostas de spawn escaladas). Nunca decida por ele.
+5. **Retomar depois da decisão do usuário** (idempotente): chame o workflow de novo com os mesmos
+   args mais `"completed": { "<id>": <resultado retornado> }` para cada worker que terminou
+   `done`, com os briefs dos bloqueados atualizados conforme a decisão do usuário, e qualquer
+   proposta de spawn aprovada adicionada como worker novo. Só o que estava pendente/bloqueado roda de novo.
+   Se uma execução foi **interrompida** (morta, crash) e nada mudou, relance com
+   `Workflow({ scriptPath, resumeFromRunId: "<runId>" })` — os agentes concluídos voltam do cache.
+
+### Motor A — Task/Agent tool (só fallback)
 
 Execute o DAG respeitando `dependsOn`. **A cada transição, atualize os arquivos de estado**:
 
@@ -266,14 +355,15 @@ Execute o DAG respeitando `dependsOn`. **A cada transição, atualize os arquivo
    compilado + objetivo — nunca a conversa inteira.
 3. **Ao retornar**: marque cada `workers/<id>.json` com `status:"done"` (ou `"blocked"`),
    `finishedAt`, e `verdict` se houver (reviewer/tester/integrator).
-4. **Próxima onda**: spawne os nós cujas dependências agora estão satisfeitas. Repita.
-5. **Ao final**: `state.json.status="done"` (ou `"blocked"` se algum bloqueou).
+4. **Gates**: se um gate reprovar, spawne um implementer corretivo para o repo dono e rode o
+   gate de novo (máx. 2 rodadas), espelhando o que o Motor B faz automaticamente.
+5. **Próxima onda**: spawne os nós cujas dependências agora estão satisfeitas. Repita.
+6. **Ao final**: `state.json.status="done"` (ou `"blocked"` se algum bloqueou).
 
-Use os templates de arquétipo em `agents/` (implementer, reviewer, integrator, tester…)
-como enquadramento de cada subagente, preenchidos com objetivo, repositório e contrato.
-
-Cada subagente é **efêmero**: faz seu trabalho delimitado, retorna o relatório, e o
-contexto dele é descartado. O Orquestrador guarda só os relatórios.
+Nos dois motores, os templates de arquétipo em `agents/` (implementer, reviewer, integrator,
+tester…) são o enquadramento de cada subagente, preenchidos com brief, repositório e contrato.
+Cada subagente é **efêmero**: faz seu trabalho delimitado, retorna o relatório, e o contexto
+dele é descartado. O Orquestrador guarda só os relatórios.
 
 ## Passo 6b — Reconciliar com a base (conflitos) antes do PR
 
@@ -294,12 +384,14 @@ git -C "<path-do-worktree>" rev-list --count "HEAD..origin/<mainBranch>"
 
 ## Passo 7 — Integrar e reportar
 
-- Persista artefatos em `.sessions/<ISSUE-ID>/`:
-  `execution-plan.md` (o DAG) e `workers/<agent-id>.md` (contrato + retorno de cada um).
-- Resuma: o que mudou por repo, evidências, testes rodados, questões em aberto e qualquer
-  repo que ficou em lote/adiado.
-- Se um `reviewer` ou `conflict-resolver` retornou achados bloqueantes, NÃO siga para PR —
-  mostre-os e pergunte ao usuário como proceder.
+- Artefatos em `.sessions/<ISSUE-ID>/`: `execution-plan.md` (o DAG) e `workers/<agent-id>.md`
+  (o relatório completo de cada agente — no Motor B os próprios agentes gravam, incluindo os
+  agentes extras do workflow; no Motor A você grava a partir de cada retorno).
+- Resuma: o que mudou por repo, evidências, testes rodados, **rodadas de correção por gate** (o
+  que cada gate pegou e como foi corrigido), achados refutados na verificação, workers gerados
+  ao vivo, questões em aberto e qualquer repo que ficou em lote/adiado.
+- Se algum gate ou `conflict-resolver` continua bloqueado, NÃO siga para PR —
+  mostre os achados e pergunte ao usuário como proceder.
 - **Mova a task no gerenciador** (siga `agents/TASK-STATUS.md`):
   - gatilho `blocked` se houver achados bloqueantes;
   - gatilho `done` quando tudo passou e a sessão foi concluída.

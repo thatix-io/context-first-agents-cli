@@ -30,3 +30,9 @@ retornar. A expertise de domínio vem do seu contrato de contexto, não de uma p
 ## Retorno (exatamente este formato)
 summary / changes / evidence / tests / unresolved / confidence
 (veja CONTEXT-CONTRACT.md)
+
+## Modo workflow
+- As regras do workflow (comandos de estado, arquivo de relatório, retorno estruturado curto) vêm no seu prompt.
+- **Execução corretiva**: se o seu prompt tiver "Findings to fix", corrija exatamente esses achados
+  no seu repo, adicione/ajuste os testes que provam cada correção, faça commit e reporte por achado o que mudou.
+- Trabalho fora do seu brief que é claramente necessário → proponha em `spawn[]` em vez de fazer.

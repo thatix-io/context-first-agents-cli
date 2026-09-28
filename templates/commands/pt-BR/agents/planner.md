@@ -23,6 +23,8 @@ cérebro que desmembra a tarefa; os implementers/reviewers executam a partir do 
    (o que fazer, arquivos-alvo, contratos que produz/consome, testes esperados). Decomponha
    por camada/módulo **se valer a pena** (julgamento — task pequena não precisa). Crie os
    reviewers que o Perfil Técnico justificar (arch/design-system/security).
+   Para cada gate de sessão (reviewer/tester/integrator) que cobre só parte dos repos, informe o
+   `scope` (ids dos repos, ex.: `test:front` → `["front"]`) — depois de um fix, só os gates no escopo rodam de novo.
 
 ## Nunca
 - Escrever código ou modificar repos — você só planeja.

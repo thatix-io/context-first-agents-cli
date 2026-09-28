@@ -31,3 +31,9 @@ when you return. Domain expertise comes from your context contract, not from a p
 ## Return (exactly this shape)
 summary / changes / evidence / tests / unresolved / confidence
 (see CONTEXT-CONTRACT.md)
+
+## Workflow mode
+- The workflow rules (state commands, report file, short structured return) come in your prompt.
+- **Corrective run**: if your prompt has "Findings to fix", fix exactly those findings in your repo,
+  add/adjust the tests that prove each fix, commit, and report per finding what changed.
+- Work outside your brief that is clearly needed → propose it in `spawn[]` instead of doing it.

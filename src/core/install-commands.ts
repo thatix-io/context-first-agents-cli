@@ -4,11 +4,13 @@ import chalk from 'chalk';
 import { templatesDir } from '../utils/paths.js';
 import { ensureDir, pathExists } from '../utils/config.js';
 
-const SUPPORTED_LANGS = ['en', 'pt-BR'];
+const SUPPORTED_LANGS = ['en', 'es', 'pt-BR'];
 
 /**
- * Copy the agent command templates (.md) into an orchestrator's commands dir.
- * These .md files ARE the orchestration engine — Node only places them.
+ * Copy the agent command templates (.md) into an orchestrator's commands dir, plus the
+ * language-independent engine files into sibling dirs: `.claude/workflows/` (the scripts
+ * /orchestrate runs via the Workflow tool) and `.claude/bin/` (the worker state helper).
+ * These files ARE the orchestration engine — Node only places them.
  */
 export async function installCommands(
   orchestratorDir: string,
@@ -27,6 +29,15 @@ export async function installCommands(
   await ensureDir(destRoot);
   const written: string[] = [];
   await copyTree(srcRoot, destRoot, Boolean(opts.force), written);
+
+  // Language-independent engine files: workflow scripts + the worker state helper they call.
+  for (const dir of ['workflows', 'bin']) {
+    const src = path.join(templatesDir(), dir);
+    if (!(await pathExists(src))) continue;
+    const dest = path.join(orchestratorDir, path.dirname(commandsDir), dir);
+    await ensureDir(dest);
+    await copyTree(src, dest, Boolean(opts.force), written);
+  }
   written.sort();
   for (const f of written) console.log(chalk.green(`  ✓ ${path.relative(orchestratorDir, f)}`));
   return written;

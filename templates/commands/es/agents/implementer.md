@@ -30,3 +30,9 @@ retornar. La experiencia de dominio viene de tu contrato de contexto, no de una 
 ## Retorno (exactamente esta forma)
 summary / changes / evidence / tests / unresolved / confidence
 (ver CONTEXT-CONTRACT.md)
+
+## Modo workflow
+- Las reglas del workflow (comandos de estado, archivo de reporte, retorno estructurado corto) vienen en tu prompt.
+- **Ejecución correctiva**: si tu prompt tiene "Findings to fix", corrige exactamente esos hallazgos
+  en tu repo, agrega/ajusta los tests que prueban cada corrección, haz commit y reporta por hallazgo qué cambió.
+- Trabajo fuera de tu brief que es claramente necesario → propónlo en `spawn[]` en vez de hacerlo.

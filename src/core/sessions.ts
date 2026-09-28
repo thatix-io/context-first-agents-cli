@@ -37,6 +37,10 @@ export interface SessionState {
   title?: string;
   complexity?: string;
   status: 'planned' | 'running' | 'blocked' | 'done' | 'unknown';
+  /** Execution engine used by /orchestrate: 'workflow' (Engine B) or 'task' (Engine A fallback). */
+  engine?: 'workflow' | 'task';
+  /** Workflow runs of this session (Engine B), in order — used to resume. */
+  runs?: Array<{ runId: string; startedAt?: string; status?: string }>;
   createdAt?: string;
   updatedAt?: string;
   repos?: string[];
@@ -155,6 +159,8 @@ export async function readSession(orchestratorDir: string, issueId: string): Pro
       // session is running/blocked even if state.json still says "done" (e.g. pre-pr/pr
       // reopened the work). Prevents a truly-active session from showing as done.
       status: reconcileStatus(state?.status as SessionState['status'] | undefined, workers),
+      engine: state?.engine,
+      runs: state?.runs,
       createdAt: state?.createdAt,
       updatedAt: state?.updatedAt,
       repos: state?.repos,

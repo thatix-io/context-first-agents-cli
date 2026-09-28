@@ -15,7 +15,14 @@ runtime derives automatically. `/plan` and `/work` may still exist as manual esc
 
 - ✅ Read `context-manifest.json` + `ai.properties.md` from the orchestrator.
 - ✅ The Orchestrator's own context stays LIGHT: you coordinate, you do not implement.
-- ✅ Each unit of work is done by a **subagent (Task tool)** with an **isolated context contract**.
+- ✅ Each unit of work is done by a **subagent** with an **isolated context contract**.
+- ✅ **Execution runs on Engine B — the `Workflow` tool** (script `orchestrate-execute`): the DAG,
+  the fix loops, the live graph and the limits are enforced by code, not by your memory.
+  **Invoking `/orchestrate` IS the user's explicit opt-in to run this workflow — do not ask
+  again.** Engine A (Task/Agent tool, wave by wave) is only the fallback when the `Workflow`
+  tool does not exist in this environment (see Step 6).
+- ✅ Decisions stay with the user, in this main loop: plan approval, blockers, out-of-pattern
+  spawns. The workflow never guesses — it ends and hands the blockers back to you.
 - ✅ Never build a catalog of domain agents (no `frontend-agent`, `payments-agent`). A worker is
   compiled on the fly: `archetype + objective + repository + context contract + tools`.
 - ❌ Never dump whole repos into a subagent. Select, do not dump.
@@ -139,21 +146,23 @@ re-planning everything). Instead, `/orchestrate` is a **seed**:
    - **Risks** and **execution order**.
    - And crucially: **which workers to create** (role, repo/layer, detailed brief, deps).
 2. **Present the planner's plan and get approval** — this is your control point (like
-   approving the old `plan.md`).
-3. **Spawn the first wave of workers** the planner defined.
+   approving the old `plan.md`). Nothing executes before it.
+3. Hand the approved graph to the execution engine (Step 6).
 
-### Live graph (fully dynamic)
-From there the graph is **alive**: any agent may **spawn the next workers** when work reveals
-the need (an implementer finds a missing service → requests a new worker; an integrator finds
-a mismatch → requests a fix). When generating a new worker:
-- create `workers/<id>.json` (status `pending`, with a detailed brief) and wire its `dependsOn`;
-- the dashboard shows the worker **appearing live**.
+### Live graph (fully dynamic, enforced by the workflow)
+The graph is **alive**: any worker may **propose new workers** when work reveals the need (an
+implementer finds a missing service, a helper module, a migration step). Workers do not spawn
+agents themselves — they return proposals in `spawn[]` with `inScope` / `newRisk` flags, and the
+workflow applies the **dynamic control**:
+- **within the pattern** (inside the approved plan's scope, within `maxWorkers`, no new risk) →
+  the workflow creates the worker (`D1`, `D2`…), wires it before everything downstream of the
+  proposer, and runs it — the dashboard shows it **appearing live**;
+- **off-pattern** (outside the plan's scope, high/new risk such as an unplanned migration,
+  security or breaking change, `maxWorkers` reached) → the proposal is **not** executed; it comes
+  back in `needsHuman[]` and you **STOP and ask the user** (Step 6, "Handle the result").
 
-**Dynamic control** (don't stop for every worker): auto-generate while **within the pattern**
-(inside the approved plan's scope, within `maxWorkers`, no new risk). **STOP and ask the user
-— showing the blockers** — when it goes off-pattern: outside the plan's scope, high/new risk
-(unplanned migration, security, breaking change), ambiguity the spec doesn't answer, or a
-reviewer's blocking finding. Never guess in those cases.
+Gates never propose workers: a reviewer/tester/integrator reports `findings[]`, and the
+workflow's **fix loop** creates the corrective implementers (Step 6).
 
 ## Step 5 — Compile a Context Contract per node (with a detailed brief)
 
@@ -238,20 +247,99 @@ After this, each agent's `writeBoundary` (`.sessions/<ISSUE-ID>/<repo>/`) actual
 ## Step 5c — Write the initial state (for the dashboard)
 
 Write machine-readable state into `.sessions/<ISSUE-ID>/` (format in the orchestrator's
-`SESSION-STATE.md`). This feeds `context-agents dashboard`.
+`SESSION-STATE.md`). This feeds `context-agents dashboard`. **You are the only writer of
+`state.json`**; each worker writes only its own `workers/<id>.json`.
 
-1. `state.json`: `{ issueId, title, complexity, status:"planned", createdAt, repos, waves }`
-   (`waves` = the waves from Step 4; `title` = the human task title from the spec, so the
-   dashboard shows "ISSUE-ID · title").
-2. `workers/<id>.json` for each node: `{ id, name, archetype, repository, objective,
+1. `state.json`: `{ issueId, title, complexity, status:"planned", engine, createdAt, repos, waves }`
+   (`engine` = `"workflow"` or `"task"` per Step 6; `waves` = the waves from Step 4; `title` =
+   the human task title from the spec, so the dashboard shows "ISSUE-ID · title").
+2. `workers/<id>.json` for each planned node: `{ id, name, archetype, repository, objective,
    dependsOn, status:"pending", currentStep:null, steps:[], startedAt:null,
-   finishedAt:null, verdict:null }` (include the descriptive `name` from Step 4).
+   finishedAt:null, verdict:null }` (include the descriptive `name` from Step 4) — the whole
+   graph shows up on the dashboard before anything runs.
 3. **Move the task in the tracker** — trigger `work_started`: follow `agents/TASK-STATUS.md`
    (best-effort; skip if there's no task manager).
 
-Keep writes small and frequent — the dashboard polls these files.
+## Step 6 — Execute the graph
 
-## Step 6 — Spawn ephemeral agents (Task tool)
+### Choose the engine
+- **Engine B — Workflow (default).** If the `Workflow` tool is available in this environment,
+  ALWAYS use it, for every complexity level. This is not a proposal to the user: running
+  `/orchestrate` already is the opt-in.
+- **Engine A — Task/Agent tool (fallback).** Only when the `Workflow` tool does not exist (e.g.
+  another AI tool). Record `engine:"task"` in `state.json` and follow "Engine A" below.
+
+If the workflow runtime warns that the graph exceeds its recommended size, tell the user they can
+raise it in `/config` ("Dynamic workflow size") — never shrink the approved plan to fit.
+
+### Engine B — run the `orchestrate-execute` workflow
+
+1. **Compile the args** (JSON object — pass it as a real object, not a string):
+   ```json
+   {
+     "issueId": "<ISSUE-ID>",
+     "sessionDir": "<absolute path of .sessions/<ISSUE-ID>>",
+     "commandsDir": "<absolute path of .claude/commands>",
+     "stateHelper": "<absolute path of .claude/bin/worker-state.mjs>",
+     "maxWorkers": <orchestration.parallelism.maxWorkers>,
+     "maxFixRounds": 2,
+     "effort": <orchestration.agentEffort, if set>,
+     "model": <orchestration.agentModel, if set>,
+     "repos": [{ "id": "<repo>", "worktree": "<absolute worktree path>", "testCommand": "<cmd>" }],
+     "workers": [{
+       "id": "W1", "name": "impl:service-a", "archetype": "implementer",
+       "repository": "service-a", "dependsOn": [],
+       "brief": "<the dense brief from Step 5>",
+       "contract": { "<the compiled context contract from Step 5>": "..." }
+     }, {
+       "id": "W5", "name": "test:service-a", "archetype": "tester",
+       "repository": null, "scope": ["service-a"], "dependsOn": ["W3"], "brief": "...", "contract": {}
+     }]
+   }
+   ```
+   `repos` lists only the impacted repos (the worktrees from Step 5b). **`scope`** (gates) = the
+   repos a session-level gate covers — set it whenever a gate covers a subset (e.g. `test:front`,
+   `review:design-system`): after a fix, only gates whose scope the fix touched re-run.
+   Omitted → the gate covers every impacted repo. Omit `effort`/`model` unless the manifest sets
+   them: by default judgment work inherits the session settings and only the tester is lowered.
+2. **Set `state.json.status = "running"`** and call the tool:
+   `Workflow({ name: "orchestrate-execute", args: <the object above> })`.
+   If the name does not resolve, use
+   `Workflow({ scriptPath: "<absolute path of .claude/workflows/orchestrate-execute.js>", args })`.
+   Record the returned `runId` in `state.json.runs[]`. The workflow runs in the background —
+   you are notified when it finishes; do not poll.
+3. **What the workflow guarantees** (you do not re-implement any of it):
+   - **DAG without barriers**: each worker starts as soon as ITS dependencies finish; a
+     blocked worker skips only its dependents, independent branches keep going.
+   - **Fix loops on every gate** (reviewer / tester / integrator): a failing verdict
+     (`BLOCKED` / `RED` / `MISMATCH`) → corrective implementers per owning repo → the gate
+     re-runs, up to `maxFixRounds`; then it stops as blocked.
+   - **Adversarial verification** of reviewer blocking findings before anyone fixes them
+     (refuted findings are dropped; a finding survives unless disproved with evidence).
+   - **Scoped regression**: a gate that passed before a later fix touched a repo in its scope
+     re-runs — limited to the fix changes and the touched repos' tests.
+   - **Live graph** with the dynamic control from Step 4b.
+   - **Instrumentation + reports on disk**: every agent writes its own `workers/<id>.json` (via
+     the state helper) and its full report `workers/<id>.md` (extra agents get ids like `W4.v1`
+     verify, `W4.fix1.<repo>` fix, `W4.r2` re-run, `W5.reg1` regression, `D1` spawned).
+4. **Handle the result** — it is **compact on purpose** (`{ status, workers[], extraAgents[],
+   acceptedSpawns[], fixRounds[], needsHuman[] }`, each worker with a ≤3-line summary); the full
+   reports are the `workers/<id>.md` files. Open a report only when you need its detail (a
+   blocker, a summary that doesn't explain itself) — never read them all into your context.
+   - Reconcile each `workers/<id>.json` with the returned status/verdict (fix any file an agent
+     left inconsistent).
+   - `status: "done"` → `state.json.status = "done"` → Step 6b.
+   - `status: "blocked"` → `state.json.status = "blocked"`, trigger `blocked` (TASK-STATUS),
+     and **STOP: show the user every `needsHuman[]` item** (blocked workers + their
+     `unresolved`, unverifiable findings, escalated spawn proposals). Never decide for them.
+5. **Resume after the user decides** (idempotent): call the workflow again with the same args
+   plus `"completed": { "<id>": <returned result> }` for every worker that finished `done`,
+   with the blocked workers' briefs updated per the user's decision, and any approved spawn
+   proposal added as a new worker. Only pending/blocked work runs again.
+   If a run was **interrupted** (killed, crashed) and nothing changed, relaunch with
+   `Workflow({ scriptPath, resumeFromRunId: "<runId>" })` — finished agents come back from cache.
+
+### Engine A — Task/Agent tool (fallback only)
 
 Execute the DAG respecting `dependsOn`. **On each transition, update the state files**:
 
@@ -264,15 +352,15 @@ Execute the DAG respecting `dependsOn`. **On each transition, update the state f
    objective — never the whole conversation.
 3. **On return**: set each `workers/<id>.json` to `status:"done"` (or `"blocked"`),
    `finishedAt`, and `verdict` if any (reviewer/tester/integrator).
-4. **Next wave**: spawn nodes whose dependencies are now satisfied. Repeat until done.
-5. **At the end**: `state.json.status="done"` (or `"blocked"` if any blocked).
+4. **Gates**: if a gate fails, spawn a corrective implementer for the owning repo and re-run
+   the gate (max 2 rounds), mirroring what Engine B does automatically.
+5. **Next wave**: spawn nodes whose dependencies are now satisfied. Repeat until done.
+6. **At the end**: `state.json.status="done"` (or `"blocked"` if any blocked).
 
-Use the archetype prompt templates in `agents/` (implementer, reviewer, integrator,
-tester, …) as the system framing for each subagent, filled with the node's objective,
-repository, and context contract.
-
-Each subagent is **ephemeral**: it does its bounded job, returns its report, and its
-context is discarded. The Orchestrator only keeps the reports.
+In both engines, the archetype templates in `agents/` (implementer, reviewer, integrator,
+tester, …) are the system framing of each subagent, filled with the node's brief, repository,
+and context contract. Each subagent is **ephemeral**: it does its bounded job, returns its
+report, and its context is discarded. The Orchestrator only keeps the reports.
 
 ## Step 6b — Reconcile with the base (conflicts) before PR
 
@@ -293,12 +381,14 @@ git -C "<worktree-path>" rev-list --count "HEAD..origin/<mainBranch>"
 
 ## Step 7 — Integrate and report
 
-- Persist artifacts under `.sessions/<ISSUE-ID>/`:
-  `execution-plan.md` (the DAG), and `workers/<agent-id>.md` (each contract + return).
-- Summarize: what changed per repo, evidence, tests run, unresolved questions,
-  and any repo that was batched/deferred.
-- If a `reviewer` or `conflict-resolver` returned blocking findings, do NOT proceed to PR —
-  surface them and ask the user how to proceed.
+- Artifacts under `.sessions/<ISSUE-ID>/`: `execution-plan.md` (the DAG) and
+  `workers/<agent-id>.md` (each agent's full report — in Engine B the agents write their own,
+  including the workflow's extra agents; in Engine A you write them from each return).
+- Summarize: what changed per repo, evidence, tests run, **fix rounds per gate** (what each
+  gate caught and how it was fixed), findings refuted by verification, workers spawned live,
+  unresolved questions, and any repo that was batched/deferred.
+- If any gate or `conflict-resolver` is still blocked, do NOT proceed to PR —
+  surface the findings and ask the user how to proceed.
 - **Move the task in the tracker** (follow `agents/TASK-STATUS.md`):
   - trigger `blocked` if there are blocking findings;
   - trigger `done` when everything passed and the session is complete.

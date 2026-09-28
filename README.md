@@ -158,6 +158,7 @@ commands `/observe` and `/metrics` are also included.
 **Installed `.md` commands** (into `.claude/commands/`): `warm-up`,
 `products/{collect,refine,spec,check}`, **`orchestrate`** (+ `agents/`),
 `engineer/{start,plan,work,pre-pr,pr,merge}` (escape hatches + ship), `quality/{observe,metrics}`.
+Plus the workflow engine: `.claude/workflows/orchestrate-execute.js` and `.claude/bin/worker-state.mjs`.
 
 ## Dashboard
 
@@ -177,12 +178,46 @@ an `execution-plan.md` fallback (shown without live status).
 
 Installed into `.claude/commands/`:
 
-- **`orchestrate.md`** — classifies complexity, builds the execution DAG, compiles a
-  context contract per node, and spawns ephemeral subagents (Task tool) wave by wave.
+- **`orchestrate.md`** — classifies complexity, has a planner write the plan, compiles a
+  context contract per node, and hands the approved graph to the execution engine (below).
 - **`agents/CONTEXT-CONTRACT.md`** — the exact contract shape and the required return format.
 - **`agents/{implementer,reviewer,integrator,tester}.md`** — behavioral archetypes
   (not domain agents). A concrete worker is compiled as
   `archetype + objective + repository + context contract + tools`.
+
+## Execution engine — deterministic multi-agent workflow
+
+Once you approve the plan, `/orchestrate` does **not** drive the agents turn by turn. It runs
+the bundled workflow script **`.claude/workflows/orchestrate-execute.js`** through Claude Code's
+`Workflow` tool (invoking `/orchestrate` is the opt-in). The orchestration logic is code, so it
+doesn't depend on the model remembering it:
+
+- **DAG without barriers**: each worker starts as soon as *its* dependencies finish; a blocked
+  worker skips only its dependents.
+- **Fix loops on every gate**: reviewer `BLOCKED` / tester `RED` / integrator `MISMATCH` →
+  corrective implementer per owning repo → the gate re-runs (up to `maxFixRounds`, default 2).
+- **Adversarial verification**: reviewer blocking findings are challenged by a verifier before
+  anyone fixes them; only findings that survive are fixed.
+- **Regression pass**: a gate that passed before a later fix changed the code runs again.
+- **Live graph**: workers propose new workers; in-scope/no-new-risk proposals run automatically,
+  the rest come back to you.
+- **Human in the loop at the edges**: plan approval before, blockers after — the workflow never
+  guesses; it ends with `needsHuman[]` and `/orchestrate` resumes only the pending work.
+
+Each agent writes its own `workers/<id>.json` (via the tiny `.claude/bin/worker-state.mjs` helper),
+so the dashboard shows the fix/verify/re-run agents appearing live.
+
+**Token economy without cutting quality:** regressions re-check only the repos a fix touched
+(gates declare a `scope`); test output stays out of context (summary + failures only, full log on
+disk); each agent writes its full report to `workers/<id>.md` and returns a ≤3-line summary, so
+the orchestrator's context stays small; the tester runs at lower reasoning effort while judgment
+work (implementers, reviewers, verifiers) keeps the session's — overridable via
+`orchestration.agentEffort` / `agentModel`.
+
+**Why a fallback exists.** `Workflow` is a tool of the Claude Code harness (the runtime that
+executes the script, spawns the subagents, caps concurrency and keeps the resume journal) — not
+a model feature or an open standard. In other AI tools the `.md` falls back to **Engine A**:
+Task-tool subagents spawned wave by wave, with the same contracts and a best-effort fix loop.
 
 ## `context-manifest.json`
 

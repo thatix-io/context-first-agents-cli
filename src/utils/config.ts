@@ -50,6 +50,13 @@ export interface OrchestrationConfig {
   maxFilesPerWorker?: number;
   /** Project-wide context indexes every agent may consult. */
   indexes?: string[];
+  /**
+   * Optional reasoning-effort override per archetype for workflow agents
+   * (e.g. { "tester": "low" }). Default: judgment work inherits the session, tester is lowered.
+   */
+  agentEffort?: Record<string, 'low' | 'medium' | 'high' | 'xhigh' | 'max'>;
+  /** Optional model override per archetype for workflow agents. Default: inherit the session. */
+  agentModel?: Record<string, string>;
 }
 
 /**
