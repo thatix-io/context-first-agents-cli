@@ -12,6 +12,22 @@ This command validates that everything is ready to create Pull Requests.
 
 Read `context-manifest.json` and `ai.properties.md` from the orchestrator to get repositories, base_path, and task_management_system.
 
+## Mode and session state
+
+**Usage**: `/pre-pr <ISSUE-ID> [--headless]`.
+- Default (interactive): as always — problems you cannot fix are brought to the user.
+- `--headless`: no question is asked. Every point that needs a person (a decision, missing
+  access/credentials, a failure the fix agents could not solve) is **recorded in `needsHuman`**
+  and the command **ends** — e.g. `claude -p "/pre-pr <ISSUE-ID> --headless"` in the orchestrator.
+
+Session state goes through the helper (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`,
+format in `SESSION-STATE.md`; if the helper is missing, edit `state.json` by hand):
+- On start: `SS status running pre-pr`.
+- Something only a person can solve: `SS need prepr-<slug> <decision|access|failure> "<reason>" "<how to resolve>" pre-pr-report.md`
+  (status becomes `blocked`) → interactive: ask; `--headless`: write the report and end.
+  When it is solved (or on a re-run that passes): `SS resolve prepr-<slug>`.
+- All validations passed: `SS status done pre-pr`.
+
 ## 🎯 Objective
 
 Ensure that the implementation is complete, tested, and ready for review before creating PRs.
@@ -272,9 +288,8 @@ do **NOT** mark the task done and do **NOT** proceed to PR. Instead of fixing ad
 behave like `/orchestrate`: **reopen the session and spawn corrective agents**.
 
 1. 🔴 **Reopen the session as ACTIVE** (so the dashboard shows work is in progress):
-   - In `.sessions/<ISSUE-ID>/state.json`, set `status:"running"` and refresh `updatedAt`.
-     (If missing — old-flow session — create a minimal one:
-     `{ issueId, title, status:"running", createdAt, updatedAt, waves:[] }`.)
+   - `SS status running pre-pr` (the helper creates `state.json` if missing — old-flow session;
+     also `SS set '{"issueId":"<ISSUE-ID>","title":"<title>"}'` then).
    - **Move the task** — trigger `reopened`: follow `agents/TASK-STATUS.md`.
 2. 🧩 **Build a small fix graph** — one worker per problem/impacted repo, same shape as
    `/orchestrate` (archetype `implementer` to fix, `conflict-resolver` for merge conflicts,
@@ -285,11 +300,15 @@ behave like `/orchestrate`: **reopen the session and spawn corrective agents**.
    worker's `status`/`currentStep`/`steps[]` as they work, inside the session worktree
    (never the main repo). Each agent fixes its scope and runs the tests.
 4. ✅ **Only then revalidate** (run `/pre-pr` again): if it passes, mark the workers `done`,
-   set `state.json.status:"done"`, and now proceed to PR. If it still fails, keep it
+   `SS status done pre-pr`, and now proceed to PR. If it still fails, keep it
    `running` and repeat — the task stays ACTIVE on the dashboard until it's truly resolved.
+5. 🧑 **Stop after 2 fix rounds** on the same problem, or right away when the fix needs a
+   decision / access only a person has: `SS need prepr-<slug> …` (above) — interactive: ask;
+   `--headless`: end the command (never guess).
 
 > Golden rule: **while any fix is pending, `status` is NEVER `done`.** The task leaves the
-> "active" state only when everything passes.
+> "active" state only when everything passes — or becomes `blocked` with the reason in
+> `needsHuman` when only a person can unblock it.
 
 ## 📊 Validation Report
 

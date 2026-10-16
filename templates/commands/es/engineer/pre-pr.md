@@ -45,6 +45,22 @@ Después de leer los archivos, tendrás:
 
 **🛑 NO continúe sin leer estos archivos!** ¡Contienen información crítica para la correcta ejecución del comando!
 
+## Modo y estado de la sesión
+
+**Uso**: `/pre-pr <ISSUE-ID> [--headless]`.
+- Por defecto (interactivo): como siempre — los problemas que no puedes corregir se llevan al usuario.
+- `--headless`: no se hace ninguna pregunta. Todo punto que necesite a una persona (una decisión,
+  acceso/credenciales faltantes, una falla que los agentes de corrección no lograron resolver) se
+  **registra en `needsHuman`** y el comando **termina** — ej.: `claude -p "/pre-pr <ISSUE-ID> --headless"` en el orquestador.
+
+El estado de la sesión pasa por el helper (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`,
+formato en `SESSION-STATE.md`; si el helper no existe, edita `state.json` a mano):
+- Al iniciar: `SS status running pre-pr`.
+- Algo que solo una persona puede resolver: `SS need prepr-<slug> <decision|access|failure> "<motivo>" "<cómo resolverlo>" pre-pr-report.md`
+  (el status pasa a `blocked`) → interactivo: pregunta; `--headless`: escribe el reporte y termina.
+  Cuando se resuelva (o en una nueva ejecución que pase): `SS resolve prepr-<slug>`.
+- Todas las validaciones pasaron: `SS status done pre-pr`.
+
 
 ## 🎯 Objetivo
 
@@ -306,9 +322,8 @@ seguridad), **NO** marques la tarea como concluida ni sigas al PR. En vez de cor
 forma ad-hoc, compórtate como `/orchestrate`: **reabre la sesión y spawnea agentes correctivos**.
 
 1. 🔴 **Reabre la sesión como ACTIVA** (para que el dashboard muestre trabajo en curso):
-   - En `.sessions/<ISSUE-ID>/state.json`, define `status:"running"` y actualiza `updatedAt`.
-     (Si no existe — sesión del flujo antiguo — crea uno mínimo:
-     `{ issueId, title, status:"running", createdAt, updatedAt, waves:[] }`.)
+   - `SS status running pre-pr` (el helper crea `state.json` si no existe — sesión del flujo
+     antiguo; en ese caso también `SS set '{"issueId":"<ISSUE-ID>","title":"<título>"}'`).
    - **Mueve la tarea** — disparador `reopened`: sigue `agents/TASK-STATUS.md`.
 2. 🧩 **Arma un mini-grafo de corrección** — un worker por problema/repo impactado, con el
    mismo formato de `/orchestrate` (arquetipo `implementer` para corregir,
@@ -319,11 +334,15 @@ forma ad-hoc, compórtate como `/orchestrate`: **reabre la sesión y spawnea age
    `status`/`currentStep`/`steps[]` de cada worker mientras trabajan, dentro del worktree de
    la sesión (nunca el repo principal). Cada agente corrige su ámbito y corre los tests.
 4. ✅ **Solo entonces revalida** (corre `/pre-pr` de nuevo): si pasa, marca los workers
-   `done`, define `state.json.status:"done"` y ahora sí sigue al PR. Si aún falla, mantén
+   `done`, `SS status done pre-pr` y ahora sí sigue al PR. Si aún falla, mantén
    `running` y repite — la tarea sigue ACTIVA en el dashboard hasta estar realmente resuelta.
+5. 🧑 **Detente tras 2 rondas de corrección** sobre el mismo problema, o de inmediato cuando la
+   corrección exige una decisión / un acceso que solo una persona tiene: `SS need prepr-<slug> …`
+   (arriba) — interactivo: pregunta; `--headless`: termina el comando (nunca adivines).
 
 > Regla de oro: **mientras haya una corrección pendiente, `status` NUNCA es `done`.** La
-> tarea sale del estado "activo" solo cuando todo pasa.
+> tarea sale del estado "activo" solo cuando todo pasa — o pasa a `blocked` con el motivo en
+> `needsHuman` cuando solo una persona puede desbloquearla.
 
 ## 📊 Reporte de Validación
 

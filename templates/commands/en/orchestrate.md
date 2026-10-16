@@ -7,7 +7,17 @@ running one monolithic agent over a huge shared context.
 This command REPLACES the old linear `start → plan → work` flow with a graph the
 runtime derives automatically. `/plan` and `/work` may still exist as manual escape hatches.
 
-**Argument**: `#$ARGUMENTS` (an ISSUE-ID and/or a path to a spec/task file).
+**Argument**: `#$ARGUMENTS` (an ISSUE-ID and/or a path to a spec/task file, plus optional flags).
+
+**Flags** (optional — without them the command is interactive, as always):
+- `--plan-only` — plan, record the plan as waiting for approval, and stop (nothing executes).
+- `--resume` — continue a session stopped at a gate: reads `.sessions/<ISSUE-ID>/approval.json`
+  (`{ approved, by, at, notes }`) and executes, or stops if it was rejected / is missing.
+- `--headless` — no gate asks a question: every human gate records a `needsHuman` item in
+  `state.json`, sets the status and **ends the command**. For non-interactive runs, e.g.
+  `claude -p "/orchestrate <ISSUE-ID> --plan-only --headless"` in the orchestrator directory.
+
+`--plan-only` and `--resume` also work without `--headless`.
 
 ---
 
@@ -23,12 +33,43 @@ runtime derives automatically. `/plan` and `/work` may still exist as manual esc
   tool does not exist in this environment (see Step 6).
 - ✅ Decisions stay with the user, in this main loop: plan approval, blockers, out-of-pattern
   spawns. The workflow never guesses — it ends and hands the blockers back to you.
+- ✅ **Every human gate is also written to disk** (`state.json` → `needsHuman[]`, via
+  `.claude/bin/session-state.mjs`), so the dashboard and other tools see "waiting on you" without
+  reading this conversation. Interactive: record it, then ask. `--headless`: record it and stop.
 - ✅ Never build a catalog of domain agents (no `frontend-agent`, `payments-agent`). A worker is
   compiled on the fly: `archetype + objective + repository + context contract + tools`.
 - ❌ Never dump whole repos into a subagent. Select, do not dump.
 - ❌ Never let a subagent modify normative specs.
 
 ---
+
+## Step 0 — Mode and session state
+
+1. Parse the flags from the arguments (`--plan-only`, `--resume`, `--headless`); the rest is the
+   ISSUE-ID / spec path. Keep the mode in mind for every gate below.
+2. **State helper.** All session-level state goes through
+   `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID> <command>` (abbreviated `SS` below —
+   format in `SESSION-STATE.md`): `set '<json>'`, `status <status> [phase]`, `need <id> <kind>
+   "<reason>" "<howToResolve>" <ref>`, `need-json -` (stdin), `resolve <id>|--all`,
+   `apply-approval`, `show`. It writes `state.json` atomically and appends `events.jsonl`. If the
+   helper file does not exist, edit `state.json` by hand with the same fields (and append the
+   event lines to `events.jsonl`).
+3. **`--resume`** — jump here instead of planning again:
+   - Run `SS show`. If nothing is pending and the session is not `blocked`/`awaiting_approval`,
+     say so and stop.
+   - Run `SS apply-approval` and act on its `result`:
+     - `missing` / `stale` / `invalid` → change nothing; tell the user (what is pending and that
+       `approval.json` must be written after it) and **stop**.
+     - `rejected` → the helper already set `status: done` + `rejected: true` + `notes`. Report the
+       notes and **stop** (nothing executes).
+     - `approved` → the pending items were resolved. Load the configuration (Step 1) and
+       continue from the gate that was pending:
+       `plan-approval` → `SS status running execute`, reload the approved plan
+       (`execution-plan.md`) and go to **Step 5**;
+       blocked workers / spawn proposals → **Step 6, "Resume after the user decides"**, using
+       `notes` as the human decision; `conflict-<repo>` → **Step 7**.
+4. Otherwise (new run): `SS set '{"issueId":"<ISSUE-ID>"}'` then `SS status planned plan` — the
+   session shows up as being planned (re-planning an existing session also moves it back to `plan`).
 
 ## Step 1 — Load configuration
 
@@ -44,7 +85,9 @@ runtime derives automatically. `/plan` and `/work` may still exist as manual esc
 ## Step 2 — Load the spec
 
 - If a task manager is configured and the argument is an ISSUE-ID, read the issue via the
-  appropriate MCP. Otherwise read the spec file passed as argument, or ask the user for it.
+  appropriate MCP. Otherwise read the spec file passed as argument, or ask the user for it
+  (`--headless`: `SS need spec-missing decision "No spec/issue found for <ISSUE-ID>" "Provide the spec (file or tracker issue) and re-run"` and stop;
+  tracker unreachable → kind `access`).
 - Read the relevant `orchestration.indexes` (the context routers) to ground yourself.
   Do NOT read the whole codebase — you are only classifying and routing here.
 
@@ -146,7 +189,15 @@ re-planning everything). Instead, `/orchestrate` is a **seed**:
    - **Risks** and **execution order**.
    - And crucially: **which workers to create** (role, repo/layer, detailed brief, deps).
 2. **Present the planner's plan and get approval** — this is your control point (like
-   approving the old `plan.md`). Nothing executes before it.
+   approving the old `plan.md`). Nothing executes before it. First record the gate on disk:
+   `SS set '{"title":"<task title>","complexity":"<level>"}'` and
+   `SS need plan-approval approval "Plan ready for approval" "Approve in the conversation, or write .sessions/<ISSUE-ID>/approval.json and run /orchestrate <ISSUE-ID> --resume" execution-plan.md`
+   (status becomes `awaiting_approval`). Then, by mode:
+   - **interactive** (default): show the plan and ask. Approved → `SS resolve plan-approval`,
+     `SS status running execute` and continue. Rejected → `SS set '{"rejected":true,"notes":"<why>"}'`, `SS resolve plan-approval`,
+     `SS status done` and stop. Changes requested → adjust the plan and ask again.
+   - **`--plan-only`** or **`--headless`**: do not ask. Show/summarize the plan and **stop here** —
+     the session stays `awaiting_approval`; approval comes through `approval.json` + `--resume`.
 3. Hand the approved graph to the execution engine (Step 6).
 
 ### Live graph (fully dynamic, enforced by the workflow)
@@ -250,9 +301,10 @@ Write machine-readable state into `.sessions/<ISSUE-ID>/` (format in the orchest
 `SESSION-STATE.md`). This feeds `context-agents dashboard`. **You are the only writer of
 `state.json`**; each worker writes only its own `workers/<id>.json`.
 
-1. `state.json`: `{ issueId, title, complexity, status:"planned", engine, createdAt, repos, waves }`
-   (`engine` = `"workflow"` or `"task"` per Step 6; `waves` = the waves from Step 4; `title` =
-   the human task title from the spec, so the dashboard shows "ISSUE-ID · title").
+1. `state.json` (through the helper — it keeps `status`, `phase`, `needsHuman`, `updatedAt`
+   consistent): `SS set '{"issueId","title","complexity","engine","repos","waves"}'` with the
+   real values (`engine` = `"workflow"` or `"task"` per Step 6; `waves` = the waves from Step 4;
+   `title` = the human task title from the spec, so the dashboard shows "ISSUE-ID · title").
 2. `workers/<id>.json` for each planned node: `{ id, name, archetype, repository, objective,
    dependsOn, status:"pending", currentStep:null, steps:[], startedAt:null,
    finishedAt:null, verdict:null }` (include the descriptive `name` from Step 4) — the whole
@@ -302,11 +354,11 @@ raise it in `/config` ("Dynamic workflow size") — never shrink the approved pl
    `review:design-system`): after a fix, only gates whose scope the fix touched re-run.
    Omitted → the gate covers every impacted repo. Omit `effort`/`model` unless the manifest sets
    them: by default judgment work inherits the session settings and only the tester is lowered.
-2. **Set `state.json.status = "running"`** and call the tool:
+2. **`SS status running execute`** and call the tool:
    `Workflow({ name: "orchestrate-execute", args: <the object above> })`.
    If the name does not resolve, use
    `Workflow({ scriptPath: "<absolute path of .claude/workflows/orchestrate-execute.js>", args })`.
-   Record the returned `runId` in `state.json.runs[]`. The workflow runs in the background —
+   Record the returned `runId` in `state.json.runs[]` (`SS set '{"runs":[…]}'`). The workflow runs in the background —
    you are notified when it finishes; do not poll.
 3. **What the workflow guarantees** (you do not re-implement any of it):
    - **DAG without barriers**: each worker starts as soon as ITS dependencies finish; a
@@ -328,14 +380,30 @@ raise it in `/config` ("Dynamic workflow size") — never shrink the approved pl
    blocker, a summary that doesn't explain itself) — never read them all into your context.
    - Reconcile each `workers/<id>.json` with the returned status/verdict (fix any file an agent
      left inconsistent).
-   - `status: "done"` → `state.json.status = "done"` → Step 6b.
-   - `status: "blocked"` → `state.json.status = "blocked"`, trigger `blocked` (TASK-STATUS),
-     and **STOP: show the user every `needsHuman[]` item** (blocked workers + their
-     `unresolved`, unverifiable findings, escalated spawn proposals). Never decide for them.
-5. **Resume after the user decides** (idempotent): call the workflow again with the same args
-   plus `"completed": { "<id>": <returned result> }` for every worker that finished `done`,
-   with the blocked workers' briefs updated per the user's decision, and any approved spawn
-   proposal added as a new worker. Only pending/blocked work runs again.
+   - `status: "done"` → `SS status done execute` → Step 6b.
+   - `status: "blocked"` → **record every `needsHuman[]` item on disk, as returned** (they
+     already have the contract shape `{ id, kind, reason, howToResolve, ref }`; extra fields are
+     ignored by the helper):
+     ```bash
+     node .claude/bin/session-state.mjs .sessions/<ISSUE-ID> need-json - <<'JSON'
+     <the workflow's needsHuman array>
+     JSON
+     ```
+     (status becomes `blocked`, or `awaiting_approval` if every item is an approval). If the
+     workflow returned `blocked` with an empty `needsHuman`, record one item per blocked worker
+     (`<id>-blocked`, kind `decision`, reason = its summary, ref `workers/<id>.md`). Trigger
+     `blocked` (TASK-STATUS). Then, by mode:
+     - **interactive**: **STOP and show the user every item** (blocked workers + their
+       `unresolved`, unverifiable findings, escalated spawn proposals). Never decide for them.
+       When they decide → `SS resolve <ids>` and go to step 5.
+     - **`--headless`**: do not ask — summarize the items and **end the command**. The decision
+       comes back through `approval.json` (`notes` = the decision) + `/orchestrate <ID> --resume`.
+5. **Resume after the user decides** (idempotent): `SS status running execute`, then call the
+   workflow again with the same args plus `"completed": { "<id>": <returned result> }` for every
+   worker that finished `done`, with the blocked workers' briefs updated per the user's decision
+   (in `--resume`: the `notes` of `approval.json`), and any approved spawn proposal added as a new
+   worker. Only pending/blocked work runs again. (After a `--resume`, rebuild `completed` from the
+   `workers/<id>.json` files that are `done` and their `workers/<id>.md` reports.)
    If a run was **interrupted** (killed, crashed) and nothing changed, relaunch with
    `Workflow({ scriptPath, resumeFromRunId: "<runId>" })` — finished agents come back from cache.
 
@@ -344,7 +412,7 @@ raise it in `/config` ("Dynamic workflow size") — never shrink the approved pl
 Execute the DAG respecting `dependsOn`. **On each transition, update the state files**:
 
 1. **When a wave starts**: for each node in the wave, set `workers/<id>.json` to
-   `status:"running"`, `startedAt`, and a short `currentStep`; set `state.json.status="running"`.
+   `status:"running"`, `startedAt`, and a short `currentStep`; `SS status running execute`.
    **On every step change** during execution, update `currentStep` AND append
    `{ step, at }` to the `steps[]` array (the dashboard shows this history as a pipeline).
 2. **Parallel wave**: spawn all nodes in the wave **in a single message with multiple Task
@@ -355,7 +423,9 @@ Execute the DAG respecting `dependsOn`. **On each transition, update the state f
 4. **Gates**: if a gate fails, spawn a corrective implementer for the owning repo and re-run
    the gate (max 2 rounds), mirroring what Engine B does automatically.
 5. **Next wave**: spawn nodes whose dependencies are now satisfied. Repeat until done.
-6. **At the end**: `state.json.status="done"` (or `"blocked"` if any blocked).
+6. **At the end**: `SS status done execute`; or, if any worker is blocked, one
+   `SS need <id>-blocked decision "<why>" "<how to resolve>" workers/<id>.md` per blocked worker
+   (`failure` when a gate still fails after the fix rounds) and handle it like Engine B step 4.
 
 In both engines, the archetype templates in `agents/` (implementer, reviewer, integrator,
 tester, …) are the system framing of each subagent, filled with the node's brief, repository,
@@ -377,7 +447,12 @@ git -C "<worktree-path>" rev-list --count "HEAD..origin/<mainBranch>"
   `agents/conflict-resolver.md`) for that repo. It rebases onto `origin/<mainBranch>`,
   resolves conflicts guided by the spec, runs the tests, and **STOPS for your approval**.
   Record its status under `workers/` like the others.
-- If it returns `NEEDS-HUMAN`, do **not** proceed to PR — show the conflicts and ask.
+- `RESOLVED` → approval gate: `SS need conflict-<repo> approval "Conflicts with <mainBranch> resolved in <repo> — review the resolution" "<how to approve>" workers/<id>.md`.
+  Interactive: show the resolution and ask (approved → `SS resolve conflict-<repo>`, continue).
+  `--headless`: stop here (approval via `approval.json` + `--resume`).
+- If it returns `NEEDS-HUMAN`, do **not** proceed to PR —
+  `SS need conflict-<repo> decision "<the conflict that needs a decision>" "<how to resolve>" workers/<id>.md`;
+  interactive: show the conflicts and ask; `--headless`: stop.
 
 ## Step 7 — Integrate and report
 
@@ -388,7 +463,9 @@ git -C "<worktree-path>" rev-list --count "HEAD..origin/<mainBranch>"
   gate caught and how it was fixed), findings refuted by verification, workers spawned live,
   unresolved questions, and any repo that was batched/deferred.
 - If any gate or `conflict-resolver` is still blocked, do NOT proceed to PR —
-  surface the findings and ask the user how to proceed.
+  make sure it is in `needsHuman` (`SS show`), then surface the findings and ask the user how to
+  proceed (`--headless`: end the command).
+- Otherwise `SS status done execute` (nothing pending) — next step: `/pre-pr`.
 - **Move the task in the tracker** (follow `agents/TASK-STATUS.md`):
   - trigger `blocked` if there are blocking findings;
   - trigger `done` when everything passed and the session is complete.
@@ -397,4 +474,6 @@ git -C "<worktree-path>" rev-list --count "HEAD..origin/<mainBranch>"
 
 If any subagent hits a Jidoka stop (ambiguity, spec conflict, missing contract), it must
 return `unresolved` instead of guessing. Bubble that up to the user rather than pushing
-forward.
+forward: record it with `SS need <id> decision|access|failure "<reason>" "<how to resolve>" <ref>`
+(`access` for missing credentials/permissions/environment), then ask (interactive) or end the
+command (`--headless`). In `--headless` **never** ask a question and never guess an answer.

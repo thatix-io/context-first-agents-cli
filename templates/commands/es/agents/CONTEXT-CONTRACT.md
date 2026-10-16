@@ -69,9 +69,11 @@ este archivo); quedan registradas aquí como referencia y para el Motor A.
 
 ### 1. Estado — un comando corto por hito
 Tu prompt trae tres comandos listos para tu `workers/<id>.json` (el dashboard lo lee en vivo):
-`… start '<meta>' "<primer paso>"`, `… step "<qué ahora>"`, `… finish done|blocked [VEREDICTO]`.
-Úsalos en **3–5 hitos**, no en cada acción. Nunca escribas `state.json` ni el archivo de otro
-worker — el orquestador es su único escritor.
+`… start '<meta>' "<primer paso>"`, `… step "<qué ahora>"`, `… finish done|blocked [VEREDICTO] ["<por qué bloqueado>"]`.
+Úsalos en **3–5 hitos**, no en cada acción. Cuando termines `blocked`, da el motivo en una línea
+(se convierte en el motivo "esperándote" que ve la persona). Nunca escribas `state.json` ni el
+archivo de otro worker — el orquestador es su único escritor (él eleva tu bloqueo al
+`needsHuman` de la sesión).
 
 ### 2. Reporte en disco, retorno estructurado corto
 - Antes de retornar, escribe tu **reporte completo** (summary / changes / evidence / tests /

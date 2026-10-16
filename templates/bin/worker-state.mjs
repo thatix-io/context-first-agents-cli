@@ -4,17 +4,20 @@
 //
 //   node worker-state.mjs <file> start '<meta json>' "<first step>"
 //   node worker-state.mjs <file> step "<what you are doing now>"
-//   node worker-state.mjs <file> finish <done|blocked> [VERDICT]
+//   node worker-state.mjs <file> finish <done|blocked> [VERDICT] ["<why blocked>"]
 //
 // `start` merges <meta> (id, name, archetype, repository, dependsOn, objective) over any
 // existing file, so a `pending` file written by the orchestrator keeps its fields.
 // Writes are atomic (tmp + rename): the dashboard never reads a half-written file.
+// `finish blocked` takes an optional one-line reason (stored as `blockedReason` and as the last
+// step) — it becomes the `reason` of the session's needsHuman item for this worker.
+// Workers never write state.json: the orchestrator (session-state.mjs) is its only writer.
 
 import fs from 'node:fs';
 import path from 'node:path';
 
-const [file, cmd, a, b] = process.argv.slice(2);
-const usage = 'usage: worker-state.mjs <file> start <meta-json> [step] | step <text> | finish <done|blocked> [verdict]';
+const [file, cmd, a, b, c] = process.argv.slice(2);
+const usage = 'usage: worker-state.mjs <file> start <meta-json> [step] | step <text> | finish <done|blocked> [verdict] [reason]';
 const fail = (msg) => {
   console.error(`worker-state: ${msg}\n${usage}`);
   process.exit(2);
@@ -49,7 +52,13 @@ if (cmd === 'start') {
   if (a !== 'done' && a !== 'blocked') fail('finish needs done|blocked');
   state.status = a;
   state.finishedAt = now;
-  state.verdict = b ?? null;
+  state.verdict = b || null;
+  if (a === 'blocked' && c) {
+    state.blockedReason = c;
+    addStep(`blocked: ${c}`);
+  } else if (a === 'done') {
+    state.blockedReason = null;
+  }
 } else {
   fail(`unknown command "${cmd}"`);
 }

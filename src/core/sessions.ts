@@ -1,6 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { pathExists } from '../utils/config.js';
+import { loadManifest, pathExists } from '../utils/config.js';
+import {
+  readSessionStatus,
+  type NeedsHumanItem,
+  type SessionPhase,
+  type SessionStatus,
+  type SessionStatusEntry,
+} from './session-status.js';
 
 export interface StepEvent {
   step: string;
@@ -17,6 +24,8 @@ export interface WorkerState {
   dependsOn?: string[];
   status: 'pending' | 'running' | 'done' | 'blocked' | 'unknown';
   currentStep?: string | null;
+  /** Why the worker is blocked (worker-state.mjs `finish blocked <VERDICT> "<reason>"`). */
+  blockedReason?: string | null;
   /** Ordered history of steps this worker went through. */
   steps?: StepEvent[];
   startedAt?: string | null;
@@ -36,7 +45,17 @@ export interface SessionState {
   issueId: string;
   title?: string;
   complexity?: string;
-  status: 'planned' | 'running' | 'blocked' | 'done' | 'unknown';
+  /**
+   * Normalized status (v0.15 contract). Read from state.json when it follows the contract,
+   * inferred from the session files otherwise (see core/session-status.ts).
+   */
+  status: SessionStatus | 'unknown';
+  /** Normalized phase: refine · plan · execute · pre-pr · pr · merge. */
+  phase?: SessionPhase;
+  /** What is waiting on a human (approvals, decisions, access, failures). */
+  needsHuman?: NeedsHumanItem[];
+  /** true when status/phase were inferred (session predates the v0.15 contract). */
+  legacy?: boolean;
   /** Execution engine used by /orchestrate: 'workflow' (Engine B) or 'task' (Engine A fallback). */
   engine?: 'workflow' | 'task';
   /** Workflow runs of this session (Engine B), in order — used to resume. */
@@ -96,7 +115,7 @@ async function readJson<T>(file: string): Promise<T | null> {
  * prd.md / context.md). Strips the issue-id prefix and common boilerplate suffixes so
  * the dashboard can show "<ISSUE-ID> · <clean title>". Returns null if nothing usable.
  */
-async function extractTitle(sessionDir: string, issueId: string): Promise<string | null> {
+export async function extractTitle(sessionDir: string, issueId: string): Promise<string | null> {
   const sources = ['refined.md', 'prd.md', 'context.md', 'architecture.md'];
   for (const file of sources) {
     let text: string;
@@ -149,20 +168,21 @@ export async function readSession(orchestratorDir: string, issueId: string): Pro
 
   const pipeline = await detectPipeline(sdir);
   const artifactTitle = await extractTitle(sdir, issueId);
+  // Single source of truth for status/phase/needsHuman (same as `status --json`): trusts a
+  // v0.15 state.json, infers for older sessions (live workers win over a stale "done").
+  const norm = await readSessionStatus(sdir, issueId);
+  const normalized = { status: norm.status, phase: norm.phase, needsHuman: norm.needsHuman, legacy: norm.legacy };
 
   if (state || workers.length) {
     return {
       issueId,
       title: state?.title ?? artifactTitle ?? undefined,
       complexity: state?.complexity,
-      // Agents take precedence over state.status: if any worker is running/blocked, the
-      // session is running/blocked even if state.json still says "done" (e.g. pre-pr/pr
-      // reopened the work). Prevents a truly-active session from showing as done.
-      status: reconcileStatus(state?.status as SessionState['status'] | undefined, workers),
+      ...normalized,
       engine: state?.engine,
       runs: state?.runs,
       createdAt: state?.createdAt,
-      updatedAt: state?.updatedAt,
+      updatedAt: norm.updatedAt ?? state?.updatedAt,
       repos: state?.repos,
       waves: state?.waves,
       workers: workers.length ? workers : wavesToWorkers(state?.waves),
@@ -173,31 +193,45 @@ export async function readSession(orchestratorDir: string, issueId: string): Pro
   // Fallback: parse execution-plan.md so old sessions still render (attach pipeline too).
   const fb = await parsePlanFallback(sdir, issueId);
   fb.pipeline = pipeline;
+  Object.assign(fb, normalized);
+  fb.updatedAt = norm.updatedAt ?? undefined;
   if (!fb.title && artifactTitle) fb.title = artifactTitle;
   return fb;
 }
 
-function deriveStatus(workers: WorkerState[]): SessionState['status'] {
-  if (!workers.length) return 'unknown';
-  if (workers.some((w) => w.status === 'blocked')) return 'blocked';
-  if (workers.every((w) => w.status === 'done')) return 'done';
-  if (workers.some((w) => w.status === 'running')) return 'running';
-  return 'planned';
-}
-
 /**
- * Reconcile the session's declared status with its agents. Live agent state wins over a
- * stale `state.json`: a running/blocked worker means the session is running/blocked even
- * if the file says "done" (e.g. /pre-pr or /pr reopened the work to fix something).
+ * Normalized status of every session of one orchestrator — the rows of `status --json`:
+ * `{ project, issueId, title, status, phase, needsHuman, updatedAt, path, legacy }`.
  */
-function reconcileStatus(
-  declared: SessionState['status'] | undefined,
-  workers: WorkerState[]
-): SessionState['status'] {
-  if (workers.some((w) => w.status === 'running')) return 'running';
-  if (workers.some((w) => w.status === 'blocked')) return 'blocked';
-  if (declared) return declared;
-  return deriveStatus(workers);
+export async function collectProjectStatus(orchestratorDir: string): Promise<SessionStatusEntry[]> {
+  const dir = path.resolve(orchestratorDir);
+  const manifest = await loadManifest(dir).catch(() => null);
+  const project = manifest?.project ?? path.basename(dir);
+  const out: SessionStatusEntry[] = [];
+  for (const issueId of await listSessions(dir)) {
+    const sdir = path.join(dir, '.sessions', issueId);
+    const norm = await readSessionStatus(sdir, issueId);
+    let title: string | null = null;
+    try {
+      const st = JSON.parse(await fs.readFile(path.join(sdir, 'state.json'), 'utf-8'));
+      if (typeof st?.title === 'string' && st.title.trim()) title = st.title;
+    } catch {
+      /* no state.json */
+    }
+    title ??= await extractTitle(sdir, issueId);
+    out.push({
+      project,
+      issueId,
+      title,
+      status: norm.status,
+      phase: norm.phase,
+      needsHuman: norm.needsHuman,
+      updatedAt: norm.updatedAt,
+      path: sdir,
+      legacy: norm.legacy,
+    });
+  }
+  return out;
 }
 
 function wavesToWorkers(waves?: string[][]): WorkerState[] {

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { initCommand } from './commands/init.js';
 import { createOrchestratorCommand } from './commands/create-orchestrator.js';
@@ -9,6 +11,13 @@ import { doctorCommand } from './commands/doctor.js';
 import { statusCommand } from './commands/status.js';
 import { dashboardCommand } from './commands/dashboard.js';
 
+// package.json sits one level above both src/ (dev) and dist/ (published).
+const pkg = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf-8')) as {
+  version: string;
+};
+
+const collect = (value: string, previous: string[] = []) => [...previous, value];
+
 const program = new Command();
 
 program
@@ -17,7 +26,7 @@ program
     'Context-First Agents CLI — scaffold orchestrators and run dynamic, ephemeral AI agents from specs.\n' +
       'All agent orchestration lives in .md command templates; this Node CLI only scaffolds and manages.'
   )
-  .version('0.1.0');
+  .version(pkg.version);
 
 program
   .command('init')
@@ -53,7 +62,10 @@ program
 
 program
   .command('status')
-  .description('Show orchestrator repos, risk signals, and active sessions')
+  .description('Show sessions with normalized status/phase/needsHuman (--json for machines)')
+  .option('--json', 'Print [{ project, issueId, title, status, phase, needsHuman, updatedAt, path, legacy }]')
+  .option('--project <dir>', 'Orchestrator directory (repeatable). Default: current dir, else dashboard projects', collect)
+  .option('--all', 'Every project linked to the dashboard registry')
   .action(statusCommand);
 
 program

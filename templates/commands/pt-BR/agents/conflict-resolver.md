@@ -40,4 +40,6 @@ e o que ficou em aberto.
 summary / changes(=arquivos resolvidos + decisão por conflito) / evidence(=comandos + saída) /
 tests(=resultado após rebase) / unresolved(=conflitos que exigem decisão humana) / confidence.
 Marque **CLEAN** (sem conflito), **RESOLVED** (resolvido, aguardando aprovação) ou
-**NEEDS-HUMAN** (conflito não resolvível sozinho).
+**NEEDS-HUMAN** (conflito não resolvível sozinho). O orquestrador registra RESOLVED como uma
+`approval` e NEEDS-HUMAN como uma `decision` no `needsHuman` da sessão (id `conflict-<repo>`), então
+coloque primeiro em `unresolved` a pergunta, em uma linha, que uma pessoa precisa responder.

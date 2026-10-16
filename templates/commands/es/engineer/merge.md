@@ -3,12 +3,22 @@
 Cierra el ciclo tras `/pr`: actualiza la base, resuelve conflictos con agentes, confirma
 contigo y hace el merge — **agnóstico al proveedor**.
 
-**Argumento**: `#$ARGUMENTS` (un ISSUE-ID; usa el `mainBranch` del manifiesto, por defecto `main`).
+**Argumento**: `#$ARGUMENTS` (un ISSUE-ID; usa el `mainBranch` del manifiesto, por defecto `main`),
+más flags opcionales:
+- `--headless` — no se hace ninguna pregunta: la confirmación (Paso 4) y cualquier conflicto
+  `NEEDS-HUMAN` se registran en `needsHuman` y el comando **termina** (no se mergea nada).
+- `--resume` — continúa tras haberse dado la confirmación fuera de la conversación, vía
+  `.sessions/<ISSUE-ID>/approval.json` (`{ approved, by, at, notes }`).
+
+El estado de la sesión pasa por el helper (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`,
+formato en `SESSION-STATE.md`; si el helper no existe, edita `state.json` a mano). Al iniciar:
+`SS phase merge`.
 
 ## Reglas de oro
-- ✅ El merge es **irreversible** → **SIEMPRE** pide confirmación primero (Paso 4).
+- ✅ El merge es **irreversible** → **SIEMPRE** obtén confirmación primero (Paso 4 — en la
+  conversación, o vía `approval.json` + `--resume`).
 - ✅ Nunca hagas merge con tests rojos o un conflicto sin resolver.
-- ❌ Nunca marques la sesión `done` antes de que el merge termine.
+- ❌ Nunca marques la sesión `merged` antes de que el merge termine.
 
 ---
 
@@ -32,15 +42,16 @@ Si el `rebase` aplica limpio → sigue. Si reporta conflicto → Paso 2.
 Si algún repo entra en conflicto al traer la base, **NO** resuelvas ad-hoc. Compórtate como
 `/orchestrate`:
 
-1. 🔴 Reabre la sesión como ACTIVA: en `.sessions/<ISSUE-ID>/state.json` define
-   `status:"running"`, actualiza `updatedAt`. **Mueve la tarea** — disparador `reopened`
-   (sigue `agents/TASK-STATUS.md`).
+1. 🔴 Reabre la sesión como ACTIVA: `SS status running merge`. **Mueve la tarea** — disparador
+   `reopened` (sigue `agents/TASK-STATUS.md`).
 2. 🤖 Para cada repo en conflicto, **spawnea un agente `conflict-resolver`** (arquetipo en
    `agents/conflict-resolver.md`) con el worktree y la spec. Rebasa sobre
    `origin/<mainBranch>`, resuelve guiado por la spec, corre los tests y retorna
    `RESOLVED` / `NEEDS-HUMAN` / `CLEAN`. Registra el estado en `workers/<id>.json`
    (`name` ej.: `merge-fix:<repo>`), actualizando `currentStep`/`steps[]`.
-3. Si alguno retorna `NEEDS-HUMAN`, **DETÉN** el merge y muestra los conflictos al usuario.
+3. Si alguno retorna `NEEDS-HUMAN`, **DETÉN** el merge:
+   `SS need conflict-<repo> decision "<el conflicto>" "<cómo resolverlo>" workers/<id>.md`, luego muestra
+   los conflictos al usuario (`--headless`: termina el comando).
 
 ## Paso 3 — Revalidar
 Con la base integrada, corre el `testCommand` de cada repo impactado (del manifiesto) dentro
@@ -51,7 +62,15 @@ del worktree. Si algo queda rojo, **NO** sigas — reporta y trata como en el Pa
 - repos a mergear y la branch (`feature/<ISSUE-ID>` → `<mainBranch>`);
 - orden de merge (respeta dependencias entre repos, ej.: back antes del front);
 - resultado de los tests; conflictos resueltos por agentes.
-Solo procede al Paso 5 **tras aprobación explícita** del usuario.
+Solo procede al Paso 5 **tras aprobación explícita** del usuario:
+- Registra primero el gate: `SS need merge-confirmation approval "Plan de merge listo — confirma para mergear en <mainBranch>" "Confirma en la conversación, o escribe .sessions/<ISSUE-ID>/approval.json y ejecuta /merge <ISSUE-ID> --resume" pr.md`
+  (el status pasa a `awaiting_approval`).
+- **Interactivo**: pregunta. Confirmado → `SS resolve merge-confirmation`, `SS status running merge`, Paso 5.
+  Rechazado → `SS resolve merge-confirmation`, `SS status pr_open pr`, detente.
+- **`--headless`**: no preguntes — termina el comando aquí (no se mergea nada).
+- **`--resume`**: ejecuta `SS apply-approval` — `approved` → `SS status running merge`, rehaz rápido los
+  Pasos 1–3 (la base puede haber avanzado) y ve al Paso 5; `rejected` → `SS status pr_open pr` y detente
+  (las PRs siguen abiertas); `missing`/`stale`/`invalid` → infórmalo y detente.
 
 ## Paso 5 — Hacer el merge (agnóstico al proveedor)
 Detecta el proveedor por el remote de cada repo y usa el camino correspondiente. **Prefiere
@@ -85,10 +104,11 @@ en el board); si no hay ese paso, `status_in_test` queda en blanco y nada se mue
 - Elimina los worktrees de la sesión ya integrados
   (`git -C "{base_path}/<repo>" worktree remove ".../.sessions/<ISSUE-ID>/<repo>"`), si el
   flujo del proyecto lo requiere.
-- En `.sessions/<ISSUE-ID>/state.json`, define `status:"done"`.
+- `SS set '{"mergedAt":"<timestamp ISO>"}'` y `SS status merged merge`.
 - **Mueve la tarea** — disparador `done` (sigue `agents/TASK-STATUS.md`).
 - Reporta: repos mergeados, orden, PRs/commits, y lo que resolvieron los agentes.
 
 ## Escalación
 Cualquier ambigüedad (política de merge indefinida, dependencia de deploy, conflicto no
-resoluble) → **DETENTE** y pregunta al usuario. Nunca fuerces un merge.
+resoluble) → **DETENTE**: `SS need merge-<slug> <decision|access|failure> "<motivo>" "<cómo resolverlo>" <ref>`,
+luego pregunta al usuario (`--headless`: termina el comando). Nunca fuerces un merge.

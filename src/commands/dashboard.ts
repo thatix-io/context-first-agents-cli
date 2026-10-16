@@ -32,6 +32,11 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+/** A session is waiting on a human when it has pending needsHuman items or awaits approval. */
+function isWaiting(s: { status?: string; needsHuman?: unknown[] } | null): boolean {
+  return !!s && (s.status === 'awaiting_approval' || (s.needsHuman?.length ?? 0) > 0);
+}
+
 export async function dashboardCommand(opts: DashboardOpts): Promise<void> {
   const cwd = process.cwd();
   if (!(await pathExists(path.join(cwd, 'context-manifest.json')))) {
@@ -92,11 +97,13 @@ async function startServer(cwd: string, projectName: string, opts: DashboardOpts
           (reg?.projects ?? []).map(async (p) => {
             const ids = await listSessions(p.path).catch(() => []);
             let running = 0;
+            let waiting = 0;
             for (const id of ids) {
               const s = await readSession(p.path, id).catch(() => null);
               if (s?.status === 'running') running++;
+              if (isWaiting(s)) waiting++;
             }
-            return { name: p.name, path: p.path, sessions: ids.length, running };
+            return { name: p.name, path: p.path, sessions: ids.length, running, waiting };
           })
         );
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -118,6 +125,8 @@ async function startServer(cwd: string, projectName: string, opts: DashboardOpts
                   issueId: s.issueId,
                   title: s.title,
                   status: s.status,
+                  phase: s.phase,
+                  needsHuman: s.needsHuman ?? [],
                   complexity: s.complexity,
                   agents: (s.workers ?? []).map((w) => ({
                     id: w.id,
@@ -131,7 +140,8 @@ async function startServer(cwd: string, projectName: string, opts: DashboardOpts
             );
             const clean = sessions.filter(Boolean);
             const running = clean.filter((s) => s!.status === 'running').length;
-            return { name: p.name, path: p.path, running, sessions: clean };
+            const waiting = clean.filter((s) => isWaiting(s)).length;
+            return { name: p.name, path: p.path, running, waiting, sessions: clean };
           })
         );
         res.writeHead(200, { 'Content-Type': 'application/json' });

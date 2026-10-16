@@ -28,6 +28,14 @@ a command reaches a **trigger** below.
   `System.BoardColumn` field (Azure DevOps MCP / `az boards work-item update`), NOT by
   changing the state. Only prefix with `transition:` if you really mean a state transition.
 
+## Tracker vs. session state
+
+This file moves the issue in the **external tracker** (best-effort). The session's own
+machine-readable state (`state.json` → `status` / `phase` / `needsHuman`, `events.jsonl`) is written
+separately with `.claude/bin/session-state.mjs` (see `SESSION-STATE.md`) and must be updated
+**even when there is no tracker**. Usual pairs: `work_started` ↔ `running · execute`, `blocked` ↔
+`blocked` + `needsHuman`, `in_review` ↔ `pr_open · pr`, `in_test`/`done` (after `/merge`) ↔ `merged · merge`.
+
 ## Triggers (fixed keys)
 
 | Trigger key       | Fires when…                                      | Command      |

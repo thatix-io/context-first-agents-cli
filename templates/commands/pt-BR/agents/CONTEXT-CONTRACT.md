@@ -69,9 +69,10 @@ este arquivo); ficam registradas aqui como referência e para o Motor A.
 
 ### 1. Estado — um comando curto por marco
 O seu prompt traz três comandos prontos para o seu `workers/<id>.json` (o dashboard o lê ao vivo):
-`… start '<meta>' "<primeiro passo>"`, `… step "<o que agora>"`, `… finish done|blocked [VEREDITO]`.
-Use-os em **3–5 marcos**, não a cada ação. Nunca grave `state.json` nem o arquivo de outro worker —
-o orquestrador é o único escritor deles.
+`… start '<meta>' "<primeiro passo>"`, `… step "<o que agora>"`, `… finish done|blocked [VEREDITO] ["<por que bloqueou>"]`.
+Use-os em **3–5 marcos**, não a cada ação. Ao terminar `blocked`, dê o motivo em uma linha (ele vira
+o motivo "aguardando você" que a pessoa vê). Nunca grave `state.json` nem o arquivo de outro worker —
+o orquestrador é o único escritor deles (ele leva o seu bloqueio para o `needsHuman` da sessão).
 
 ### 2. Relatório em disco, retorno estruturado curto
 - Antes de retornar, grave o seu **relatório completo** (summary / changes / evidence / tests /

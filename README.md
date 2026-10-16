@@ -150,7 +150,7 @@ commands `/observe` and `/metrics` are also included.
 | `add:repo` | Add a repo to the manifest (id, role, **hints**, context, testCommand) |
 | `update:commands` | Overwrite the command templates |
 | `doctor` | Validate manifest, hints, indexes, and installed flow commands |
-| `status` | Show repos, risk signals, and active sessions |
+| `status [--json] [--project <dir>]… [--all]` | Sessions with normalized status / phase / "waiting on you" (`--json` for scripts and CI) |
 | `dashboard` | Serve a local web dashboard of sessions and running agents |
 
 `--lang en|es|pt-BR` selects the language of the installed `.md` commands.
@@ -158,7 +158,8 @@ commands `/observe` and `/metrics` are also included.
 **Installed `.md` commands** (into `.claude/commands/`): `warm-up`,
 `products/{collect,refine,spec,check}`, **`orchestrate`** (+ `agents/`),
 `engineer/{start,plan,work,pre-pr,pr,merge}` (escape hatches + ship), `quality/{observe,metrics}`.
-Plus the workflow engine: `.claude/workflows/orchestrate-execute.js` and `.claude/bin/worker-state.mjs`.
+Plus the workflow engine: `.claude/workflows/orchestrate-execute.js`, `.claude/bin/worker-state.mjs`
+(per-worker state) and `.claude/bin/session-state.mjs` (session state + event log).
 
 ## Dashboard
 
@@ -173,6 +174,80 @@ The dashboard lists every session (issue), its complexity, the agent graph by wa
 each agent's status (`pending → running → done/blocked`) with its current step and
 verdict — auto-refreshing every 2s. Sessions created before state-writing still render via
 an `execution-plan.md` fallback (shown without live status).
+
+Since 0.15 every session also shows its normalized **status** and **phase**, and sessions that
+need a person (`awaiting_approval` or a non-empty `needsHuman`) are flagged **⚑ waiting on you**
+with the reason and how to resolve it — on the board (sorted first), on the project cards and on
+the map. `/api/map` and `/api/projects` expose `phase`, `needsHuman` and a `waiting` count.
+
+## Machine-readable session state (0.15)
+
+Every flow command keeps `.sessions/<ISSUE-ID>/state.json` in a documented contract
+(`templates/orchestrator/SESSION-STATE.md`), so the dashboard, CI or any other tool can follow a
+session without reading the conversation:
+
+| field | values |
+|---|---|
+| `status` | `planned · awaiting_approval · running · blocked · done · pr_open · merged` |
+| `phase` | `refine · plan · execute · pre-pr · pr · merge` |
+| `needsHuman[]` | `{ id, kind: approval\|decision\|access\|failure, reason, since, howToResolve, ref }` |
+| `updatedAt` | ISO timestamp of the last change |
+
+- **Everything that waits on a person goes to disk**: the plan waiting for approval
+  (`plan-approval`), blocked workers (`W3-blocked`), escalated spawn proposals, `NEEDS-HUMAN`
+  conflicts (`conflict-<repo>`), the merge confirmation (`merge-confirmation`). The workflow
+  engine returns its `needsHuman[]` already in this shape.
+- **`events.jsonl`** — append-only, one line per change:
+  `{"type":"status",…}`, `{"type":"needs_human","item":{…}}`, `{"type":"resolved","id":…}`.
+- **One writer, no hand-written JSON**: commands call `.claude/bin/session-state.mjs`
+  (`set`, `status`, `phase`, `need`, `need-json`, `resolve`, `approval`, `apply-approval`, `show`),
+  which validates the vocabulary, writes atomically and appends the events.
+
+### Approval outside the conversation and non-interactive runs
+
+```bash
+# in the orchestrator directory
+claude -p "/orchestrate ISSUE-42 --plan-only --headless"   # plan → awaiting_approval + plan-approval, stop
+
+# approve (a person, CI, any tool) — must be written after the pending item
+echo '{"approved":true,"by":"jane","at":"2026-10-15T20:30:00Z","notes":"ok"}' \
+  > .sessions/ISSUE-42/approval.json
+
+claude -p "/orchestrate ISSUE-42 --resume --headless"      # execute; any gate → needsHuman + stop
+claude -p "/pre-pr ISSUE-42 --headless"
+```
+
+- `--plan-only`: plan, record `awaiting_approval` + `plan-approval`, stop.
+- `--resume`: read `approval.json` (`{ approved, by, at, notes }`): `approved: true` → continue from
+  the pending gate (`resolved` events; `notes` is the human decision for blocked items);
+  `false` → `status: done`, `rejected: true`, `notes` saved; missing/stale → nothing happens.
+- `--headless`: no gate asks — each one records `needsHuman`, sets the status and ends the command.
+  Also accepted by `/pre-pr`, `/pr` and `/merge` (`/merge` also takes `--resume` for the merge
+  confirmation).
+- Without flags the interactive flow is unchanged (the gate is still recorded while it asks).
+
+### `status --json`
+
+```bash
+context-agents status --json                     # this orchestrator; outside one: every dashboard project
+context-agents status --json --project ../a-orchestrator --project ../b-orchestrator
+context-agents status --json --all               # every project in ~/.context-agents/dashboard.json
+```
+
+```jsonc
+[{ "project": "example", "issueId": "ISSUE-42", "title": "Add discountRate", "status": "awaiting_approval",
+   "phase": "plan", "needsHuman": [{ "id": "plan-approval", "kind": "approval", "reason": "Plan ready for approval",
+   "since": "…", "howToResolve": "…", "ref": "execution-plan.md" }], "updatedAt": "…",
+   "path": "/abs/.sessions/ISSUE-42", "legacy": false }]
+```
+
+**Older sessions stay valid.** Sessions written before 0.15 are inferred from their files
+(`legacy: true`): phase by evidence (merge evidence → `merge`, `pr.md`/PR fields → `pr`,
+`pre-pr-report.md` → `pre-pr`, workers started → `execute`, `execution-plan.md` → `plan`, else
+`refine`); status from the workers and the old values (`in_review` → `pr_open`,
+`executable-complete` → `done`, …); one `needsHuman` `decision` per blocked worker. Orchestrators
+generated by 0.14 keep working; run `context-agents update:commands` in each one to get the new
+command templates and helper.
 
 ## The `.md` orchestration layer (the engine)
 
@@ -345,6 +420,19 @@ that adversarially checks business rules, security, and the migration's reversib
 before you ship. You didn't have to remember to add it — the `riskSignals` did.
 
 ---
+
+## Changelog
+
+### 0.15.0
+- Machine-readable session contract: normalized `status` / `phase` / `needsHuman[]` / `updatedAt` in
+  `state.json`, append-only `events.jsonl` (`SESSION-STATE.md`).
+- New helper `.claude/bin/session-state.mjs`; `worker-state.mjs finish blocked [VERDICT] "<reason>"`.
+- `/orchestrate --plan-only | --resume | --headless`, approval through `approval.json`;
+  `--headless` also for `/pre-pr`, `/pr`, `/merge` (+ `/merge --resume`).
+- Workflow engine returns `needsHuman[]` in the contract shape (`id`, `kind`, `reason`, `howToResolve`, `ref`).
+- `status --json [--project <dir>]… [--all]`, with inference for older sessions.
+- Dashboard: "waiting on you" (reason + how to resolve), phase and new status pills.
+- `npm test` (node:test) covering inference, helpers, workflow items, `status --json`, dashboard API.
 
 ## Design rules
 

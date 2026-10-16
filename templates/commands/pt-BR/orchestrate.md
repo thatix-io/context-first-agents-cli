@@ -7,7 +7,17 @@ de agentes efêmeros e especializados** e coordenar a execução deles — em ve
 Este comando SUBSTITUI o fluxo linear `start → plan → work` por um grafo que o runtime
 deriva automaticamente. `/plan` e `/work` podem continuar existindo como escape hatches manuais.
 
-**Argumento**: `#$ARGUMENTS` (um ISSUE-ID e/ou caminho de um arquivo de spec/task).
+**Argumento**: `#$ARGUMENTS` (um ISSUE-ID e/ou caminho de um arquivo de spec/task, mais flags opcionais).
+
+**Flags** (opcionais — sem elas o comando é interativo, como sempre):
+- `--plan-only` — planeja, registra o plano como aguardando aprovação e para (nada executa).
+- `--resume` — continua uma sessão parada num gate: lê `.sessions/<ISSUE-ID>/approval.json`
+  (`{ approved, by, at, notes }`) e executa, ou para se foi rejeitado / está faltando.
+- `--headless` — nenhum gate faz pergunta: todo gate humano registra um item `needsHuman` no
+  `state.json`, define o status e **encerra o comando**. Para execuções não interativas, ex.:
+  `claude -p "/orchestrate <ISSUE-ID> --plan-only --headless"` no diretório do orquestrador.
+
+`--plan-only` e `--resume` também funcionam sem `--headless`.
 
 ---
 
@@ -23,12 +33,43 @@ deriva automaticamente. `/plan` e `/work` podem continuar existindo como escape 
   ferramenta `Workflow` não existe neste ambiente (ver Passo 6).
 - ✅ Decisões ficam com o usuário, neste loop principal: aprovação do plano, bloqueios, spawns
   fora do padrão. O workflow nunca chuta — ele encerra e devolve os bloqueios para você.
+- ✅ **Todo gate humano também é gravado em disco** (`state.json` → `needsHuman[]`, via
+  `.claude/bin/session-state.mjs`), para o dashboard e outras ferramentas verem "aguardando você"
+  sem ler esta conversa. Interativo: registre e depois pergunte. `--headless`: registre e pare.
 - ✅ Nunca crie catálogo de agentes de domínio (nada de `frontend-agent`, `payments-agent`).
   Um worker é compilado na hora: `arquétipo + objetivo + repositório + contrato de contexto + ferramentas`.
 - ❌ Nunca despeje repositórios inteiros num subagente. Selecione, não despeje.
 - ❌ Nunca deixe um subagente modificar specs normativas.
 
 ---
+
+## Passo 0 — Modo e estado da sessão
+
+1. Extraia as flags dos argumentos (`--plan-only`, `--resume`, `--headless`); o resto é o
+   ISSUE-ID / caminho da spec. Tenha o modo em mente em cada gate abaixo.
+2. **Helper de estado.** Todo estado no nível da sessão passa por
+   `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID> <comando>` (abreviado `SS` abaixo —
+   formato em `SESSION-STATE.md`): `set '<json>'`, `status <status> [phase]`, `need <id> <kind>
+   "<reason>" "<howToResolve>" <ref>`, `need-json -` (stdin), `resolve <id>|--all`,
+   `apply-approval`, `show`. Ele grava o `state.json` de forma atômica e anexa ao `events.jsonl`. Se o
+   arquivo do helper não existir, edite o `state.json` à mão com os mesmos campos (e anexe as
+   linhas de evento ao `events.jsonl`).
+3. **`--resume`** — pule para cá em vez de planejar de novo:
+   - Rode `SS show`. Se não houver nada pendente e a sessão não estiver `blocked`/`awaiting_approval`,
+     informe e pare.
+   - Rode `SS apply-approval` e aja conforme o seu `result`:
+     - `missing` / `stale` / `invalid` → não altere nada; avise o usuário (o que está pendente e que
+       o `approval.json` precisa ser gravado depois disso) e **pare**.
+     - `rejected` → o helper já definiu `status: done` + `rejected: true` + `notes`. Reporte as
+       notes e **pare** (nada executa).
+     - `approved` → os itens pendentes foram resolvidos. Carregue a configuração (Passo 1) e
+       continue a partir do gate que estava pendente:
+       `plan-approval` → `SS status running execute`, recarregue o plano aprovado
+       (`execution-plan.md`) e vá para o **Passo 5**;
+       workers bloqueados / propostas de spawn → **Passo 6, "Retomar depois da decisão do usuário"**,
+       usando as `notes` como a decisão humana; `conflict-<repo>` → **Passo 7**.
+4. Caso contrário (execução nova): `SS set '{"issueId":"<ISSUE-ID>"}'` e depois `SS status planned plan` — a
+   sessão aparece como em planejamento (re-planejar uma sessão existente também a volta para `plan`).
 
 ## Passo 1 — Carregar configuração
 
@@ -45,7 +86,9 @@ deriva automaticamente. `/plan` e `/work` podem continuar existindo como escape 
 ## Passo 2 — Carregar a spec
 
 - Se houver task manager e o argumento for um ISSUE-ID, leia a issue pelo MCP apropriado.
-  Senão, leia o arquivo de spec passado como argumento, ou peça ao usuário.
+  Senão, leia o arquivo de spec passado como argumento, ou peça ao usuário
+  (`--headless`: `SS need spec-missing decision "Nenhuma spec/issue encontrada para <ISSUE-ID>" "Forneça a spec (arquivo ou issue no tracker) e rode de novo"` e pare;
+  tracker inacessível → kind `access`).
 - Leia os `orchestration.indexes` relevantes (os roteadores de contexto) para se situar.
   NÃO leia o codebase inteiro — aqui você só classifica e roteia.
 
@@ -148,7 +191,15 @@ Não pré-compute todos os workers de uma vez com objetivos de uma frase (isso d
    - **Riscos** e **ordem de execução**.
    - E, o principal: **quais workers criar** (papel, repo/camada, brief detalhado, deps).
 2. **Apresente o plano do planner e peça aprovação** — este é o seu ponto de controle
-   (como era aprovar o `plan.md`). Nada executa antes disso.
+   (como era aprovar o `plan.md`). Nada executa antes disso. Primeiro registre o gate em disco:
+   `SS set '{"title":"<título da tarefa>","complexity":"<nível>"}'` e
+   `SS need plan-approval approval "Plano pronto para aprovação" "Aprove na conversa, ou grave .sessions/<ISSUE-ID>/approval.json e rode /orchestrate <ISSUE-ID> --resume" execution-plan.md`
+   (o status vira `awaiting_approval`). Depois, conforme o modo:
+   - **interativo** (padrão): mostre o plano e pergunte. Aprovado → `SS resolve plan-approval`,
+     `SS status running execute` e siga. Rejeitado → `SS set '{"rejected":true,"notes":"<motivo>"}'`, `SS resolve plan-approval`,
+     `SS status done` e pare. Mudanças pedidas → ajuste o plano e pergunte de novo.
+   - **`--plan-only`** ou **`--headless`**: não pergunte. Mostre/resuma o plano e **pare aqui** —
+     a sessão fica `awaiting_approval`; a aprovação vem via `approval.json` + `--resume`.
 3. Entregue o grafo aprovado ao motor de execução (Passo 6).
 
 ### Grafo vivo (totalmente dinâmico, garantido pelo workflow)
@@ -252,8 +303,9 @@ Grave o estado legível por máquina em `.sessions/<ISSUE-ID>/` (formato em
 `SESSION-STATE.md` do orquestrador). Isto alimenta o `context-agents dashboard`. **Você é o
 único escritor do `state.json`**; cada worker grava apenas o seu próprio `workers/<id>.json`.
 
-1. `state.json`: `{ issueId, title, complexity, status:"planned", engine, createdAt, repos, waves }`
-   (`engine` = `"workflow"` ou `"task"` conforme o Passo 6; `waves` = as ondas do Passo 4;
+1. `state.json` (via o helper — ele mantém `status`, `phase`, `needsHuman`, `updatedAt`
+   consistentes): `SS set '{"issueId","title","complexity","engine","repos","waves"}'` com os
+   valores reais (`engine` = `"workflow"` ou `"task"` conforme o Passo 6; `waves` = as ondas do Passo 4;
    `title` = o título humano da tarefa vindo da spec, para o dashboard exibir "ISSUE-ID · título").
 2. `workers/<id>.json` para cada nó planejado: `{ id, name, archetype, repository, objective,
    dependsOn, status:"pending", currentStep:null, steps:[], startedAt:null,
@@ -304,11 +356,11 @@ pode aumentar em `/config` ("Dynamic workflow size") — nunca encolha o plano a
    `review:design-system`): depois de um fix, só rodam de novo os gates cujo escopo o fix tocou.
    Omitido → o gate cobre todos os repos impactados. Omita `effort`/`model` se o manifest não os
    definir: por padrão o trabalho de julgamento herda a sessão e só o tester é reduzido.
-2. **Marque `state.json.status = "running"`** e chame a ferramenta:
+2. **`SS status running execute`** e chame a ferramenta:
    `Workflow({ name: "orchestrate-execute", args: <o objeto acima> })`.
    Se o nome não resolver, use
    `Workflow({ scriptPath: "<caminho absoluto de .claude/workflows/orchestrate-execute.js>", args })`.
-   Registre o `runId` retornado em `state.json.runs[]`. O workflow roda em background — você é
+   Registre o `runId` retornado em `state.json.runs[]` (`SS set '{"runs":[…]}'`). O workflow roda em background — você é
    notificado quando terminar; não faça polling.
 3. **O que o workflow garante** (você não reimplementa nada disso):
    - **DAG sem barreira**: cada worker começa assim que AS SUAS dependências terminam; um
@@ -331,14 +383,30 @@ pode aumentar em `/config` ("Dynamic workflow size") — nunca encolha o plano a
    detalhe (um bloqueio, um resumo que não se explica) — nunca carregue todos no seu contexto.
    - Reconcilie cada `workers/<id>.json` com o status/veredito retornado (corrija qualquer
      arquivo que um agente deixou inconsistente).
-   - `status: "done"` → `state.json.status = "done"` → Passo 6b.
-   - `status: "blocked"` → `state.json.status = "blocked"`, gatilho `blocked` (TASK-STATUS), e
-     **PARE: mostre ao usuário cada item de `needsHuman[]`** (workers bloqueados + seus
-     `unresolved`, achados não verificáveis, propostas de spawn escaladas). Nunca decida por ele.
-5. **Retomar depois da decisão do usuário** (idempotente): chame o workflow de novo com os mesmos
-   args mais `"completed": { "<id>": <resultado retornado> }` para cada worker que terminou
-   `done`, com os briefs dos bloqueados atualizados conforme a decisão do usuário, e qualquer
-   proposta de spawn aprovada adicionada como worker novo. Só o que estava pendente/bloqueado roda de novo.
+   - `status: "done"` → `SS status done execute` → Passo 6b.
+   - `status: "blocked"` → **registre em disco cada item de `needsHuman[]`, como retornado** (eles
+     já têm o formato do contrato `{ id, kind, reason, howToResolve, ref }`; campos extras são
+     ignorados pelo helper):
+     ```bash
+     node .claude/bin/session-state.mjs .sessions/<ISSUE-ID> need-json - <<'JSON'
+     <o array needsHuman do workflow>
+     JSON
+     ```
+     (o status vira `blocked`, ou `awaiting_approval` se todos os itens forem aprovações). Se o
+     workflow retornou `blocked` com `needsHuman` vazio, registre um item por worker bloqueado
+     (`<id>-blocked`, kind `decision`, reason = o resumo dele, ref `workers/<id>.md`). Gatilho
+     `blocked` (TASK-STATUS). Depois, conforme o modo:
+     - **interativo**: **PARE e mostre ao usuário cada item** (workers bloqueados + seus
+       `unresolved`, achados não verificáveis, propostas de spawn escaladas). Nunca decida por ele.
+       Quando ele decidir → `SS resolve <ids>` e vá para o item 5.
+     - **`--headless`**: não pergunte — resuma os itens e **encerre o comando**. A decisão
+       volta via `approval.json` (`notes` = a decisão) + `/orchestrate <ID> --resume`.
+5. **Retomar depois da decisão do usuário** (idempotente): `SS status running execute`, depois chame o
+   workflow de novo com os mesmos args mais `"completed": { "<id>": <resultado retornado> }` para cada
+   worker que terminou `done`, com os briefs dos bloqueados atualizados conforme a decisão do usuário
+   (no `--resume`: as `notes` do `approval.json`), e qualquer proposta de spawn aprovada adicionada como
+   worker novo. Só o que estava pendente/bloqueado roda de novo. (Depois de um `--resume`, reconstrua o
+   `completed` a partir dos arquivos `workers/<id>.json` que estão `done` e dos seus relatórios `workers/<id>.md`.)
    Se uma execução foi **interrompida** (morta, crash) e nada mudou, relance com
    `Workflow({ scriptPath, resumeFromRunId: "<runId>" })` — os agentes concluídos voltam do cache.
 
@@ -347,7 +415,7 @@ pode aumentar em `/config` ("Dynamic workflow size") — nunca encolha o plano a
 Execute o DAG respeitando `dependsOn`. **A cada transição, atualize os arquivos de estado**:
 
 1. **Ao iniciar uma onda**: para cada nó da onda, marque `workers/<id>.json` com
-   `status:"running"`, `startedAt`, e um `currentStep` curto; marque `state.json.status="running"`.
+   `status:"running"`, `startedAt`, e um `currentStep` curto; `SS status running execute`.
    **A cada mudança de passo** durante a execução, atualize `currentStep` E anexe
    `{ step, at }` ao array `steps[]` (o dashboard mostra esse histórico como pipeline).
 2. **Onda paralela**: spawne todos os nós da onda **numa única mensagem com múltiplas
@@ -358,7 +426,9 @@ Execute o DAG respeitando `dependsOn`. **A cada transição, atualize os arquivo
 4. **Gates**: se um gate reprovar, spawne um implementer corretivo para o repo dono e rode o
    gate de novo (máx. 2 rodadas), espelhando o que o Motor B faz automaticamente.
 5. **Próxima onda**: spawne os nós cujas dependências agora estão satisfeitas. Repita.
-6. **Ao final**: `state.json.status="done"` (ou `"blocked"` se algum bloqueou).
+6. **Ao final**: `SS status done execute`; ou, se algum worker bloqueou, um
+   `SS need <id>-blocked decision "<por quê>" "<como resolver>" workers/<id>.md` por worker bloqueado
+   (`failure` quando um gate ainda reprova após as rodadas de correção) e trate como no item 4 do Motor B.
 
 Nos dois motores, os templates de arquétipo em `agents/` (implementer, reviewer, integrator,
 tester…) são o enquadramento de cada subagente, preenchidos com brief, repositório e contrato.
@@ -380,7 +450,12 @@ git -C "<path-do-worktree>" rev-list --count "HEAD..origin/<mainBranch>"
   `agents/conflict-resolver.md`) para aquele repo. Ele rebaseia sobre `origin/<mainBranch>`,
   resolve conflitos guiado pela spec, roda os testes e **PARA pedindo sua aprovação**.
   Registre o status desse agente em `workers/` como os demais.
-- Se ele retornar `NEEDS-HUMAN`, **não siga para PR** — mostre os conflitos e pergunte.
+- `RESOLVED` → gate de aprovação: `SS need conflict-<repo> approval "Conflitos com a <mainBranch> resolvidos em <repo> — revise a resolução" "<como aprovar>" workers/<id>.md`.
+  Interativo: mostre a resolução e pergunte (aprovado → `SS resolve conflict-<repo>`, siga).
+  `--headless`: pare aqui (aprovação via `approval.json` + `--resume`).
+- Se ele retornar `NEEDS-HUMAN`, **não siga para PR** —
+  `SS need conflict-<repo> decision "<o conflito que exige decisão>" "<como resolver>" workers/<id>.md`;
+  interativo: mostre os conflitos e pergunte; `--headless`: pare.
 
 ## Passo 7 — Integrar e reportar
 
@@ -391,7 +466,9 @@ git -C "<path-do-worktree>" rev-list --count "HEAD..origin/<mainBranch>"
   que cada gate pegou e como foi corrigido), achados refutados na verificação, workers gerados
   ao vivo, questões em aberto e qualquer repo que ficou em lote/adiado.
 - Se algum gate ou `conflict-resolver` continua bloqueado, NÃO siga para PR —
-  mostre os achados e pergunte ao usuário como proceder.
+  garanta que está em `needsHuman` (`SS show`), depois mostre os achados e pergunte ao usuário como
+  proceder (`--headless`: encerre o comando).
+- Caso contrário, `SS status done execute` (nada pendente) — próximo passo: `/pre-pr`.
 - **Mova a task no gerenciador** (siga `agents/TASK-STATUS.md`):
   - gatilho `blocked` se houver achados bloqueantes;
   - gatilho `done` quando tudo passou e a sessão foi concluída.
@@ -399,4 +476,7 @@ git -C "<path-do-worktree>" rev-list --count "HEAD..origin/<mainBranch>"
 ## Escalação
 
 Se um subagente bater num stop Jidoka (ambiguidade, conflito de spec, contrato faltando),
-ele deve retornar `unresolved` em vez de chutar. Suba isso ao usuário em vez de empurrar.
+ele deve retornar `unresolved` em vez de chutar. Suba isso ao usuário em vez de empurrar:
+registre com `SS need <id> decision|access|failure "<motivo>" "<como resolver>" <ref>`
+(`access` para credenciais/permissões/ambiente faltando), depois pergunte (interativo) ou encerre o
+comando (`--headless`). No `--headless` **nunca** faça perguntas e nunca chute uma resposta.

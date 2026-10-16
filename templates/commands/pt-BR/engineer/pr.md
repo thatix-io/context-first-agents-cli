@@ -47,6 +47,16 @@ Após ler os arquivos, você terá:
 
 **🛑 NÃO prossiga sem ler estes arquivos!** Eles contêm informações críticas para a execução correta do comando.
 
+## Estado da sessão
+
+O estado da sessão passa pelo helper (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`,
+formato em `SESSION-STATE.md`; se o helper não existir, edite o `state.json` à mão):
+- No início: `SS phase pr`.
+- Depois que a(s) PR(s) estiverem abertas: `SS set '{"prs":[{"repo":"<repo>","url":"<URL da PR>"}]}'` e `SS status pr_open pr`.
+- Qualquer coisa que só uma pessoa resolve (sem permissão de push, CLI do provedor não autenticada,
+  uma decisão): `SS need pr-<slug> <access|decision|failure> "<motivo>" "<como resolver>" pr.md` e pergunte —
+  com `--headless` (`/pr <ISSUE-ID> --headless`), não pergunte: registre e encerre o comando.
+
 
 ## 🛑 CRÍTICO: ONDE TRABALHAR
 
@@ -229,17 +239,17 @@ Se a revisão da PR (ou o CI da PR) apontar algo que precisa mudar, **NÃO** tra
 como concluída. Comporte-se como o `/orchestrate`: **reabra a sessão e spawne agentes
 corretivos** — não corrija de forma ad-hoc.
 
-1. 🔴 **Reabra a sessão como ATIVA**: em `.sessions/<ISSUE-ID>/state.json` defina
-   `status:"running"` e atualize `updatedAt` (crie um `state.json` mínimo se não existir).
+1. 🔴 **Reabra a sessão como ATIVA**: `SS status running pr` (o helper cria o
+   `state.json` se não existir).
    **Mova a task** — gatilho `reopened`: siga `agents/TASK-STATUS.md`.
 2. 🧩 **Um worker por comentário/ajuste** em `.sessions/<ISSUE-ID>/workers/<id>.json`, com
    `name` descritivo (ex.: `fix:pr-feedback-back`), `status:"pending"`, `steps:[]`.
 3. 🤖 **Spawne os agentes (Task tool)** em ondas como o `/orchestrate`, atualizando
    `status`/`currentStep`/`steps[]` no worktree da sessão; cada um aplica o ajuste, roda
    os testes e faz commit.
-4. ✅ **Só então** marque os workers `done`, `state.json.status:"done"`, e responda os
-   comentários na PR. **Enquanto houver ajuste pendente, `status` NUNCA é `done`** — a
-   tarefa permanece ATIVA no dashboard até tudo estar resolvido e aprovado.
+4. ✅ **Só então** marque os workers `done`, `SS status pr_open pr` (as PRs continuam abertas),
+   e responda os comentários na PR. **Enquanto houver ajuste pendente, `status` continua
+   `running`** — a tarefa permanece ATIVA no dashboard até tudo estar resolvido e aprovado.
 
 ## 🎯 Próximos Passos
 

@@ -8,7 +8,7 @@
   :root {
     --bg:#0f1420; --panel:#171d2b; --panel2:#1c2436; --border:#2a3346; --text:#e8edf7;
     --muted:#93a0b8; --accent:#5aa8ff;
-    --todo:#8b95a8; --run:#f0b429; --done:#3fce7c; --block:#ff5d6c;
+    --todo:#8b95a8; --run:#f0b429; --done:#3fce7c; --block:#ff5d6c; --wait:#c58bff;
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text);
@@ -56,6 +56,7 @@
   .n-center circle { fill:#243049; stroke:#3a4560; stroke-width:2; }
   .n-project circle { fill:#1c2a44; stroke:#345; stroke-width:1.5; }
   .n-session circle { fill:#1c2436; stroke:#2a3346; }
+  .n-session.waiting circle { fill:#2a1a3a; stroke:var(--wait); stroke-width:2; }
   .n-agent circle { stroke-width:1.5; }
   .n-agent.running circle { fill:#3a2e0c; stroke:#f0b429; }
   .n-agent.done circle { fill:#123020; stroke:#3fce7c; }
@@ -120,6 +121,19 @@
   .pill.simple{ background:#1c3a2a; color:#6ee7a0; } .pill.medium{ background:#3a331c; color:#f0d264; } .pill.complex{ background:#3a1c22; color:#ff98a3; }
   .pill.st-planned{ background:#2a3346; color:#c4cede; } .pill.st-running{ background:#3a331c; color:#f0b429; }
   .pill.st-done{ background:#1c3a2a; color:#3fce7c; } .pill.st-blocked{ background:#3a1c22; color:#ff5d6c; } .pill.st-unknown{ background:#2a3346; color:#93a0b8; }
+  .pill.st-awaiting_approval{ background:#2a1a3a; color:var(--wait); } .pill.st-pr_open{ background:#14303a; color:#5ad1ff; }
+  .pill.st-merged{ background:#1f2633; color:#8fa3c7; } .pill.phase{ background:transparent; color:var(--muted); border:1px solid var(--border); }
+  /* "waiting on you" — pending human action (needsHuman / awaiting_approval) */
+  .waiting { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--wait); background:#22142f; padding:4px 11px; border-radius:20px; max-width:100%; }
+  .needs { padding:10px 16px; background:#1a1326; border-top:1px solid #3a2a52; display:flex; flex-direction:column; gap:6px; }
+  .needs .nh { font-size:12px; line-height:1.45; }
+  .needs .nh .k { display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--wait); border:1px solid #4a3466; border-radius:10px; padding:0 7px; margin-right:6px; }
+  .needs .nh .r { color:var(--text); }
+  .needs .nh .how { color:var(--muted); display:block; margin-left:2px; }
+  .needs .nh code { font-size:11px; }
+  .pcard .wait-badge { color:var(--wait); font-weight:600; }
+  .island .ibadge .w { color:var(--wait); }
+  .island .sess-row .sr-wait { color:var(--wait); font-size:11px; margin:-3px 0 6px; }
   .live { display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:700; color:#3fce7c; background:#12281c; padding:4px 11px; border-radius:20px; }
   .live > i { width:8px; height:8px; border-radius:50%; background:#3fce7c; animation:ping 1.3s ease-out infinite; }
   @keyframes ping { 0%{box-shadow:0 0 0 0 #3fce7c99} 70%{box-shadow:0 0 0 7px #3fce7c00} 100%{box-shadow:0 0 0 0 #3fce7c00} }
@@ -230,6 +244,8 @@ const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=nu
 const esc=s=>(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const okVerdict=v=>/pass|green|consistent|done|ok/i.test(v||'');
 const qs=k=>new URLSearchParams(location.search).get(k);
+const isWaiting=s=> s && (s.status==='awaiting_approval' || ((s.needsHuman||[]).length>0));
+const waitReason=s=>{ const n=(s.needsHuman||[])[0]; if(n) return n.reason + ((s.needsHuman.length>1)?(' (+'+(s.needsHuman.length-1)+')'):''); return s.status==='awaiting_approval'?'approval pending':''; };
 const nameOf=w=> w.name || (w.archetype? (w.archetype+(w.id?(' '+w.id):'')) : (w.id||'agent'));
 function ago(iso){ if(!iso) return null; let s=Math.round((Date.now()-new Date(iso))/1000); if(s<0)s=0;
   if(s<60)return s+'s'; if(s<3600)return Math.round(s/60)+'m'; return Math.round(s/3600)+'h'; }
@@ -357,13 +373,29 @@ function session(s){
   if(s.title){ bar.appendChild(el('span','sep','·')); bar.appendChild(el('span','title', esc(s.title))); }
   bar.appendChild(el('span','spacer'));
   if(s.fromPlanFallback) bar.appendChild(el('span','idle','planned view'));
+  if(isWaiting(s)){ const wv=el('span','waiting','⚑ waiting on you'+(waitReason(s)?' · '+esc(waitReason(s)):'')); wv.title='needs a human: see the list below'; bar.appendChild(wv); }
   if(isLive) bar.appendChild(el('span','live','<i></i>LIVE · '+running+' working'));
   else if(running>0) bar.appendChild(el('span','stale','⏸ '+running+' running · '+ago(s.updatedAt)+' ago'));
   else if(s.updatedAt) bar.appendChild(el('span','idle','idle · '+ago(s.updatedAt)+' ago'));
   if(s.complexity) bar.appendChild(el('span','pill '+s.complexity, esc(s.complexity)));
-  bar.appendChild(el('span','pill st-'+(s.status||'unknown'), esc(s.status||'unknown')));
+  if(s.phase) bar.appendChild(el('span','pill phase', esc(s.phase)));
+  bar.appendChild(el('span','pill st-'+(s.status||'unknown'), esc((s.status||'unknown').replace('_',' '))));
   bar.onclick=()=>{ if(collapsed.has(s.issueId)) collapsed.delete(s.issueId); else collapsed.add(s.issueId); saveCollapsed(); render(); };
   box.appendChild(bar);
+
+  // what is waiting on a human (state.json needsHuman, or inferred for older sessions)
+  if((s.needsHuman||[]).length){
+    const nb=el('div','needs');
+    s.needsHuman.forEach(n=>{
+      const row=el('div','nh');
+      row.appendChild(el('span','k',esc(n.kind||'')));
+      row.appendChild(el('span','r',esc(n.reason||n.id)));
+      const how=[n.howToResolve?esc(n.howToResolve):'', n.ref?('<code>'+esc(n.ref)+'</code>'):'', n.since?('since '+ago(n.since)+' ago'):''].filter(Boolean).join(' · ');
+      if(how) row.appendChild(el('span','how',how));
+      nb.appendChild(row);
+    });
+    box.appendChild(nb);
+  }
 
   // pipeline stepper (refine → spec → orchestrate → pr), derived from artifacts on disk
   if(s.pipeline&&s.pipeline.length) box.appendChild(stepper(s.pipeline));
@@ -391,7 +423,7 @@ let mapFilter = localStorage.getItem('cfa_mapFilter')||'active';   // active | a
 let forceTimer = null;
 
 function agentClass(a){ return 'n-agent '+(a.status||'unknown'); }
-function isActiveSession(s){ return s.status==='running'; }
+function isActiveSession(s){ return s.status==='running' || isWaiting(s); }
 
 async function renderMap(){
   document.getElementById('crumb').textContent=' / map';
@@ -553,7 +585,7 @@ function drawRadial(stage,projects){
       const sAng=ang + (si-(nS-1)/2)*spreadS;
       const sr=baseR+130;
       const sx=cx+Math.cos(sAng)*sr, sy=cy+Math.sin(sAng)*sr;
-      const sNode=node('n-session',sx,sy,9,sn.s.issueId,'', ()=>location.search='?project='+encodeURIComponent(pn.p.name));
+      const sNode=node('n-session'+(isWaiting(sn.s)?' waiting':''),sx,sy,9,sn.s.issueId,isWaiting(sn.s)?'⚑ waiting on you':'', ()=>location.search='?project='+encodeURIComponent(pn.p.name));
       edge(pNode,sNode,sn.s.status==='running');
       const nA=sn.agents.length||0;
       const spreadA = Math.min(0.3, 0.9/Math.max(nA,1));
@@ -581,16 +613,17 @@ function drawBubbles(stage,projects){
   const tree=mapNodes(projects);
   const wrap=el('div','islands');
   tree.forEach(pn=>{
-    const island=el('div','island'+(pn.p.running?'':' dim'));
+    const island=el('div','island'+((pn.p.running||pn.p.waiting)?'':' dim'));
     const head=el('div','ihead');
     head.appendChild(el('span','iname',esc(pn.p.name)));
-    const badge=el('span','ibadge', pn.p.running?('<b>'+pn.p.running+'</b> running'):'idle');
+    const badge=el('span','ibadge', (pn.p.running?('<b>'+pn.p.running+'</b> running'):'idle')+(pn.p.waiting?(' · <span class="w">⚑ '+pn.p.waiting+' waiting on you</span>'):''));
     head.appendChild(badge);
     island.appendChild(head);
     if(!pn.sessions.length){ island.appendChild(el('div','empty-sess', mapFilter==='active'?'no active sessions':'no sessions')); }
     pn.sessions.forEach(sn=>{
       const row=el('div','sess-row');
-      row.appendChild(el('div','sr-title','<b>'+esc(sn.s.issueId)+'</b> '+esc(sn.s.title||'')+' · '+esc(sn.s.status||'')));
+      row.appendChild(el('div','sr-title','<b>'+esc(sn.s.issueId)+'</b> '+esc(sn.s.title||'')+' · '+esc(sn.s.status||'')+(sn.s.phase?(' · '+esc(sn.s.phase)):'')));
+      if(isWaiting(sn.s)) row.appendChild(el('div','sr-wait','⚑ waiting on you · '+esc(waitReason(sn.s))));
       if(mapFilter!=='summary'){
         const bubs=el('div','bubbles');
         (sn.agents||[]).forEach(a=>{
@@ -616,7 +649,7 @@ function drawBubbles(stage,projects){
 function stopForce(){ if(forceTimer){ cancelAnimationFrame(forceTimer); forceTimer=null; } }
 let forceState=null;   // {sig, gEls:{id:g}, nodes}
 function forceSig(projects){
-  return projects.map(p=>p.name+':'+(p.sessions||[]).map(s=>s.issueId+'#'+(s.agents||[]).map(a=>a.id+'='+a.status).join(',')).join('|')).join(';');
+  return projects.map(p=>p.name+':'+(p.sessions||[]).map(s=>s.issueId+(isWaiting(s)?'!':'')+'#'+(s.agents||[]).map(a=>a.id+'='+a.status).join(',')).join('|')).join(';');
 }
 function drawForce(stage,projects){
   // Live update without rebuilding: if the graph structure+statuses are unchanged, do
@@ -642,7 +675,7 @@ function drawForce(stage,projects){
     links.push(['center',pid, pn.p.running>0]);
     pn.sessions.forEach(sn=>{
       const sid=pid+'/'+sn.s.issueId; const sp=rnd(++i);
-      nodes.push({id:sid,type:'session',label:sn.s.issueId,x:sp.x,y:sp.y,vx:0,vy:0});
+      nodes.push({id:sid,type:'session',waiting:isWaiting(sn.s),label:sn.s.issueId,x:sp.x,y:sp.y,vx:0,vy:0});
       links.push([pid,sid, sn.s.status==='running']);
       sn.agents.forEach(a=>{
         const aid=sid+'/'+a.id; const ap=rnd(++i);
@@ -657,7 +690,7 @@ function drawForce(stage,projects){
   const R={center:24,project:15,session:8,agent:6};
   const lines=links.map(([a,b,hot])=>{ const l=document.createElementNS(NS,'line'); l.setAttribute('class','medge'+(hot?' hot':'')); eg.appendChild(l); return {l,a,b}; });
   const gEls=nodes.map(n=>{
-    const cls = n.type==='agent' ? ('n-agent '+(n.status||'unknown')) : ('n-'+n.type);
+    const cls = n.type==='agent' ? ('n-agent '+(n.status||'unknown')) : ('n-'+n.type+(n.waiting?' waiting':''));
     const g=document.createElementNS(NS,'g'); g.setAttribute('class','mnode '+cls+(n.type==='agent'&&n.status==='running'?' pulse':''));
     const c=document.createElementNS(NS,'circle'); c.setAttribute('r',R[n.type]); g.appendChild(c);
     if(n.label){ const t=document.createElementNS(NS,'text'); t.setAttribute('text-anchor','middle'); t.setAttribute('dy',R[n.type]+12); t.textContent=n.label; g.appendChild(t); }
@@ -695,7 +728,7 @@ function drawForce(stage,projects){
   const hotLines=lines;   // {l,a,b}
   forceState={
     stage, sig,
-    structKey: (ps)=>ps.map(p=>'p:'+p.name+'>'+(p.sessions||[]).map(s=>s.issueId+'>'+(s.agents||[]).map(a=>a.id).join('.')).join('|')).join(';'),
+    structKey: (ps)=>ps.map(p=>'p:'+p.name+'>'+(p.sessions||[]).map(s=>s.issueId+(isWaiting(s)?'!':'')+'>'+(s.agents||[]).map(a=>a.id).join('.')).join('|')).join(';'),
     _sk: null,
     sameStructure(ps){ if(this._sk==null) this._sk=this.structKey(projects); return this.structKey(ps)===this._sk; },
     refresh(ps,newSig){
@@ -740,7 +773,7 @@ async function render(){
       const root=document.getElementById('root'); root.innerHTML='';
       if(!(data.projects||[]).length){ root.appendChild(el('div','page-empty','No projects linked yet.<br>Run <code>context-agents dashboard</code> inside an orchestrator.')); return; }
       const grid=el('div','grid');
-      data.projects.sort((a,b)=>(b.running-a.running)||a.name.localeCompare(b.name));
+      data.projects.sort((a,b)=>((b.waiting||0)-(a.waiting||0))||(b.running-a.running)||a.name.localeCompare(b.name));
       data.projects.forEach(p=>{
         const a=el('a','pcard'); a.href='?project='+encodeURIComponent(p.name);
         a.appendChild(el('div','pname',esc(p.name)));
@@ -748,7 +781,8 @@ async function render(){
         const st=el('div','pstats');
         st.appendChild(el('span','stat','<b>'+p.sessions+'</b> <span>sessions</span>'));
         if(p.running>0) st.appendChild(el('span','live-badge','<i></i>'+p.running+' running'));
-        else st.appendChild(el('span','stat','<span>idle</span>'));
+        else if(!p.waiting) st.appendChild(el('span','stat','<span>idle</span>'));
+        if(p.waiting>0) st.appendChild(el('span','wait-badge','⚑ '+p.waiting+' waiting on you'));
         a.appendChild(st); grid.appendChild(a);
       });
       root.appendChild(grid);
@@ -763,14 +797,15 @@ async function render(){
   try{
     const data=await (await fetch('/api/sessions?project='+encodeURIComponent(project))).json();
     let sessions=data.sessions||[];
-    if(activeOnly) sessions=sessions.filter(s=>s.status==='running');
+    if(activeOnly) sessions=sessions.filter(s=>s.status==='running'||isWaiting(s));
     document.getElementById('metaText').textContent=sessions.length+' session(s)';
     const root=document.getElementById('root'); root.innerHTML='';
-    if(!sessions.length){ root.appendChild(el('div','page-empty', activeOnly?'No active sessions right now.':'No sessions yet. Run <code>/orchestrate &lt;ISSUE-ID&gt;</code>.')); return; }
-    // active first: running → blocked → planned/unknown → done; then most-recent within each group
-    const rank={running:0,blocked:1,planned:2,unknown:2,done:3};
+    if(!sessions.length){ root.appendChild(el('div','page-empty', activeOnly?'No active sessions (or sessions waiting on you) right now.':'No sessions yet. Run <code>/orchestrate &lt;ISSUE-ID&gt;</code>.')); return; }
+    // waiting on you first, then running → blocked → planned/unknown → pr open → done/merged;
+    // most-recent within each group
+    const rank={awaiting_approval:1,running:1,blocked:2,planned:3,unknown:3,pr_open:4,done:5,merged:6};
     sessions.sort((a,b)=>{
-      const ra=rank[a.status]??2, rb=rank[b.status]??2;
+      const ra=isWaiting(a)?0:(rank[a.status]??3), rb=isWaiting(b)?0:(rank[b.status]??3);
       if(ra!==rb) return ra-rb;
       return (b.updatedAt||b.createdAt||'').localeCompare(a.updatedAt||a.createdAt||'');
     });

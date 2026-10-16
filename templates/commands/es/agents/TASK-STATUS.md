@@ -29,6 +29,14 @@ esto siempre que un comando alcance un **disparador** de abajo.
   / `az boards work-item update`), NO cambiando el estado. Usa el prefijo `transition:`
   solo si realmente quieres una transición de estado.
 
+## Tracker vs. estado de la sesión
+
+Este archivo mueve la issue en el **tracker externo** (best-effort). El estado propio de la
+sesión, legible por máquina (`state.json` → `status` / `phase` / `needsHuman`, `events.jsonl`), se
+escribe aparte con `.claude/bin/session-state.mjs` (ver `SESSION-STATE.md`) y debe actualizarse
+**incluso cuando no hay tracker**. Pares habituales: `work_started` ↔ `running · execute`, `blocked` ↔
+`blocked` + `needsHuman`, `in_review` ↔ `pr_open · pr`, `in_test`/`done` (tras `/merge`) ↔ `merged · merge`.
+
 ## Disparadores (claves fijas)
 
 | Disparador      | Se dispara cuando…                                | Comando        |

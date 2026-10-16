@@ -40,4 +40,6 @@ left open.
 summary / changes(=resolved files + per-conflict decision) / evidence(=commands + output) /
 tests(=result after rebase) / unresolved(=conflicts needing a human decision) / confidence.
 Mark **CLEAN** (no conflict), **RESOLVED** (resolved, awaiting approval) or
-**NEEDS-HUMAN** (conflict not resolvable alone).
+**NEEDS-HUMAN** (conflict not resolvable alone). The orchestrator records RESOLVED as an
+`approval` and NEEDS-HUMAN as a `decision` in the session's `needsHuman` (id `conflict-<repo>`), so
+put the one-line question a human must answer first in `unresolved`.

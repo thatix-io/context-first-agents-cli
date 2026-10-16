@@ -14,6 +14,16 @@ Before creating PRs, make sure that:
 
 Read `context-manifest.json` and `ai.properties.md` from the orchestrator to get repositories, base_path, and task_management_system.
 
+## Session state
+
+Session state goes through the helper (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`,
+format in `SESSION-STATE.md`; if the helper is missing, edit `state.json` by hand):
+- On start: `SS phase pr`.
+- After the PR(s) are open: `SS set '{"prs":[{"repo":"<repo>","url":"<PR URL>"}]}'` and `SS status pr_open pr`.
+- Anything only a person can solve (no push permission, provider CLI not authenticated, a
+  decision): `SS need pr-<slug> <access|decision|failure> "<reason>" "<how to resolve>" pr.md` and ask —
+  with `--headless` (`/pr <ISSUE-ID> --headless`), do not ask: record it and end the command.
+
 ## 🛑 CRITICAL: WHERE TO WORK
 
 **⚠️ ATTENTION: If you need to make last-minute adjustments, ALL CODE MUST BE CREATED INSIDE THE WORKTREE!**
@@ -195,17 +205,17 @@ If the PR review (or PR CI) flags something to change, do **NOT** treat the task
 Behave like `/orchestrate`: **reopen the session and spawn corrective agents** — don't fix
 ad-hoc.
 
-1. 🔴 **Reopen the session as ACTIVE**: in `.sessions/<ISSUE-ID>/state.json` set
-   `status:"running"` and refresh `updatedAt` (create a minimal `state.json` if missing).
+1. 🔴 **Reopen the session as ACTIVE**: `SS status running pr` (the helper creates
+   `state.json` if missing).
    **Move the task** — trigger `reopened`: follow `agents/TASK-STATUS.md`.
 2. 🧩 **One worker per comment/adjustment** in `.sessions/<ISSUE-ID>/workers/<id>.json`,
    with a descriptive `name` (e.g. `fix:pr-feedback-back`), `status:"pending"`, `steps:[]`.
 3. 🤖 **Spawn the agents (Task tool)** in waves like `/orchestrate`, updating
    `status`/`currentStep`/`steps[]` in the session worktree; each applies the change, runs
    tests, and commits.
-4. ✅ **Only then** mark the workers `done`, set `state.json.status:"done"`, and respond to
-   the PR comments. **While any adjustment is pending, `status` is NEVER `done`** — the task
-   stays ACTIVE on the dashboard until everything is resolved and approved.
+4. ✅ **Only then** mark the workers `done`, `SS status pr_open pr` (the PRs are still open),
+   and respond to the PR comments. **While any adjustment is pending, `status` stays
+   `running`** — the task stays ACTIVE on the dashboard until everything is resolved and approved.
 
 ## 🎯 Next Steps
 

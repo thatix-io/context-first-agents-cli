@@ -29,6 +29,14 @@ isto sempre que um comando atingir um **gatilho** abaixo.
   update`), NÃO mudando o estado. Só use o prefixo `transition:` se realmente quiser uma
   transição de estado.
 
+## Tracker vs. estado da sessão
+
+Este arquivo move a issue no **tracker externo** (melhor esforço). O estado legível por máquina da
+própria sessão (`state.json` → `status` / `phase` / `needsHuman`, `events.jsonl`) é gravado à parte
+com `.claude/bin/session-state.mjs` (veja `SESSION-STATE.md`) e deve ser atualizado **mesmo quando
+não há tracker**. Pares usuais: `work_started` ↔ `running · execute`, `blocked` ↔ `blocked` +
+`needsHuman`, `in_review` ↔ `pr_open · pr`, `in_test`/`done` (após o `/merge`) ↔ `merged · merge`.
+
 ## Gatilhos (chaves fixas)
 
 | Gatilho         | Dispara quando…                                  | Comando        |

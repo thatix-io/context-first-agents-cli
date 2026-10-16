@@ -24,6 +24,9 @@ export const meta = {
 // The script has no filesystem access: every agent writes its own workers/<id>.json (via the
 // state helper) and its full report workers/<id>.md. The result returned to /orchestrate is
 // compact on purpose — the main loop is the most expensive context; details live on disk.
+// `needsHuman[]` items already follow the session contract (id, kind, reason, howToResolve,
+// ref — see SESSION-STATE.md), so /orchestrate records them in state.json as-is with
+// `session-state.mjs <sessionDir> need-json -`; extra fields are detail for the conversation.
 
 const A = args || {}
 if (!A.issueId || !A.sessionDir || !A.commandsDir || !Array.isArray(A.workers)) {
@@ -122,6 +125,12 @@ const runs = new Map() // id → Promise<result>
 const results = new Map() // id → final result (after fix loops)
 const started = new Set()
 const needsHuman = []
+// Every human gate goes through here so the item is ready for state.json.needsHuman.
+const RESUME_HINT = `decide, then run /orchestrate ${A.issueId} --resume (headless: write approval.json with the decision in "notes")`
+const short = (t, n = 200) => String(t || '').split('\n')[0].slice(0, n)
+function human(item) {
+  needsHuman.push({ howToResolve: `Read ${item.ref || 'execution-plan.md'}; ${RESUME_HINT}`, ...item })
+}
 const acceptedSpawns = []
 const extraAgents = [] // fix / verify / re-run agents, for the final report
 let spawnSeq = 0
@@ -152,14 +161,14 @@ function stateBlock(id, meta) {
   const file = `${A.sessionDir}/workers/${id}.json`
   const report = `${A.sessionDir}/workers/${id}.md`
   if (!A.stateHelper) {
-    return `## Your files\n- State: \`${file}\` — on start set status "running" + startedAt; per milestone update currentStep and append {step, at} to steps[]; on finish status done|blocked, finishedAt, verdict (timestamps: \`date -u +%Y-%m-%dT%H:%M:%SZ\`).\n- Report: \`${report}\``
+    return `## Your files\n- State: \`${file}\` — on start set status "running" + startedAt; per milestone update currentStep and append {step, at} to steps[]; on finish status done|blocked, finishedAt, verdict, blockedReason (one line, when blocked) (timestamps: \`date -u +%Y-%m-%dT%H:%M:%SZ\`).\n- Report: \`${report}\``
   }
   const h = `node ${shq(A.stateHelper)} ${shq(file)}`
   return [
     `## Your files`,
     `- Start:     ${h} start ${shq(JSON.stringify(meta))} "<first step>"`,
     `- Milestone: ${h} step "<what you are doing>"`,
-    `- Finish:    ${h} finish done|blocked [VERDICT]`,
+    `- Finish:    ${h} finish done|blocked [VERDICT] ["<why blocked, one line>"]`,
     `- Report:    \`${report}\``,
   ].join('\n')
 }
@@ -220,7 +229,7 @@ function run(id) {
   const p = (async () => {
     const w = nodes.get(id)
     if (!w) {
-      needsHuman.push({ worker: id, reason: 'dependency id not found in the graph' })
+      human({ id: `${id}-missing`, kind: 'failure', reason: `dependency ${id} not found in the graph`, ref: 'execution-plan.md', worker: id })
       return finish(id, { status: 'skipped', summary: 'unknown worker id' })
     }
     if (A.completed && A.completed[id]) return finish(id, A.completed[id])
@@ -232,12 +241,20 @@ function run(id) {
 
     const seqAtStart = fixSeq
     let r = await agent(workerPrompt(w), opts(w.archetype, w.name, PHASE_OF[w.archetype] || 'Implement', RETURN_SCHEMA))
-    if (!r) r = { status: 'blocked', summary: 'agent died or was skipped', unresolved: ['agent returned no result'], confidence: 'low' }
+    if (!r) r = { status: 'blocked', summary: 'agent died or was skipped', unresolved: ['agent returned no result'], confidence: 'low', died: true }
 
     if (GATES.has(w.archetype)) r = await gateLoop(w, r, id, seqAtStart)
     else handleSpawns(w, r)
 
-    if (r.status === 'blocked') needsHuman.push({ worker: id, name: w.name, verdict: r.verdict, unresolved: r.unresolved || [], findings: blocking(r), report: `${A.sessionDir}/workers/${id}.md` })
+    if (r.status === 'blocked') {
+      human({
+        id: `${id}-blocked`,
+        kind: r.died || failing(r) ? 'failure' : 'decision',
+        reason: short(`${w.name}: ${(r.unresolved || [])[0] || r.summary || 'blocked'}`),
+        ref: `workers/${id}.md`,
+        worker: id, name: w.name, verdict: r.verdict, unresolved: r.unresolved || [], findings: blocking(r), report: `${A.sessionDir}/workers/${id}.md`,
+      })
+    }
     return finish(id, r)
   })()
   runs.set(id, p)
@@ -337,7 +354,8 @@ function handleSpawns(w, r) {
     const ok = s.inScope && !s.newRisk && nodes.size < MAX_WORKERS
     if (!ok) {
       const why = !s.inScope ? 'outside the approved plan scope' : s.newRisk ? 'introduces a new risk' : `maxWorkers (${MAX_WORKERS}) reached`
-      needsHuman.push({ worker: w.id, name: w.name, proposal: s, reason: `spawn proposal escalated: ${why}` })
+      const slug = String(s.name || 'worker').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      human({ id: `spawn-${w.id}-${slug}`, kind: 'approval', reason: short(`${w.name} proposes ${s.name}: ${why}`), ref: `workers/${w.id}.md`, worker: w.id, name: w.name, proposal: s })
       continue
     }
     const id = `D${++spawnSeq}`
@@ -350,7 +368,7 @@ function handleSpawns(w, r) {
     for (const [nid, n] of nodes) {
       if (nid === id || !n.dependsOn.includes(w.id)) continue
       if (started.has(nid)) {
-        needsHuman.push({ worker: nid, name: n.name, reason: `${s.name} (${id}) was spawned after ${n.name} started — re-run ${n.name} once ${id} finishes` })
+        human({ id: `${nid}-rerun`, kind: 'decision', reason: `${s.name} (${id}) was spawned after ${n.name} started — re-run ${n.name} once ${id} finishes`, ref: `workers/${nid}.md`, worker: nid, name: n.name })
       } else {
         n.dependsOn.push(id)
       }
@@ -383,13 +401,13 @@ for (let pass = 1; pass <= MAX_FIX_ROUNDS && staleGates().length; pass++) {
       let r = (await agent(workerPrompt(rw, extra), opts(w.archetype, rw.name, PHASE_OF[w.archetype], RETURN_SCHEMA, true))) || { status: 'blocked', summary: 'agent returned no result', confidence: 'low' }
       r = await gateLoop(rw, r, w.id, seqAtStart)
       extraAgents.push({ id: rw.id, name: rw.name, archetype: w.archetype, repository: w.repository ?? null, status: r.status, verdict: r.verdict || null, summary: r.summary })
-      if (r.status === 'blocked') needsHuman.push({ worker: w.id, name: w.name, verdict: r.verdict, unresolved: r.unresolved || [], findings: blocking(r), reason: 'regression re-run failed', report: `${A.sessionDir}/workers/${rw.id}.md` })
+      if (r.status === 'blocked') human({ id: `${w.id}-blocked`, kind: 'failure', reason: short(`${w.name}: regression re-run failed — ${(r.unresolved || [])[0] || r.summary || ''}`), ref: `workers/${rw.id}.md`, worker: w.id, name: w.name, verdict: r.verdict, unresolved: r.unresolved || [], findings: blocking(r), report: `${A.sessionDir}/workers/${rw.id}.md` })
       results.set(w.id, r)
     })
   )
 }
 for (const w of staleGates()) {
-  needsHuman.push({ worker: w.id, name: w.name, reason: `still unverified against the latest fixes after ${MAX_FIX_ROUNDS} regression pass(es)` })
+  human({ id: `${w.id}-unverified`, kind: 'failure', reason: `${w.name}: still unverified against the latest fixes after ${MAX_FIX_ROUNDS} regression pass(es)`, ref: `workers/${w.id}.md`, worker: w.id, name: w.name })
 }
 
 // ─── Compact result for the main loop (full reports: workers/<id>.md) ─────────────────────

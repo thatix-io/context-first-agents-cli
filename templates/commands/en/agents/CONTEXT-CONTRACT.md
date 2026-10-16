@@ -69,9 +69,11 @@ open this file); they are recorded here for reference and for Engine A.
 
 ### 1. State — one short command per milestone
 Your prompt gives three ready-made commands for your `workers/<id>.json` (the dashboard reads it
-live): `… start '<meta>' "<first step>"`, `… step "<what now>"`, `… finish done|blocked [VERDICT]`.
-Use them at **3–5 milestones**, not on every action. Never write `state.json` or another worker's
-file — the orchestrator is their only writer.
+live): `… start '<meta>' "<first step>"`, `… step "<what now>"`, `… finish done|blocked [VERDICT] ["<why blocked>"]`.
+Use them at **3–5 milestones**, not on every action. When you finish `blocked`, give the one-line
+reason (it becomes the "waiting on you" reason the human sees). Never write `state.json` or another
+worker's file — the orchestrator is their only writer (it lifts your block into the session's
+`needsHuman`).
 
 ### 2. Report on disk, short structured return
 - Before returning, write your **full report** (summary / changes / evidence / tests / unresolved /
