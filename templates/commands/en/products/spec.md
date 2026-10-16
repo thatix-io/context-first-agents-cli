@@ -17,6 +17,32 @@ This command creates the complete specification (Product Requirements Document) 
 
 ---
 
+## Mode and session state
+
+**Usage**: `/spec <ISSUE-ID> [--headless] [--result <file>]` — protocol in
+`agents/HEADLESS.md` (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`;
+item prefix `spec-`). The PRD belongs to the product stage, so the phase stays `refine`.
+
+- On start: `SS set '{"issueId":"<ISSUE-ID>"}'` then `SS status running refine`. If `SS show`
+  lists pending `spec-*` items, consume the answer first (`SS apply-approval`, see
+  `agents/HEADLESS.md`) — `notes` are the person's answers.
+- Default (interactive): as always. When the PRD is saved and approved: `SS status done refine`.
+- **`--headless`** — no question is asked and no stakeholder review happens in the conversation:
+  - No refined requirements (`refined.md` / refined issue) →
+    `SS need spec-refine-missing decision "<ISSUE-ID> has no refined requirements" "(a) run /refine <ISSUE-ID> first (recommended) (b) write the PRD from the issue as it is — <how to answer>"` and end.
+  - A requirement, rule or technical choice the PRD cannot settle from the refined
+    requirements and the metaspecs → write it to `.sessions/<ISSUE-ID>/spec-questions.md` and
+    `SS need spec-<slug> decision "<question>" "(a) … (b) … — <how to answer>" spec-questions.md`;
+    end after recording all of them.
+  - Nothing open → save the PRD to `.sessions/<ISSUE-ID>/prd.md` (always, in this mode) and record
+    the review gate: `SS need spec-approval approval "PRD ready for approval" "Read prd.md; approve with approval.json (approved: true, adjustments in notes) and re-run /spec <ISSUE-ID> --headless — approved: false rejects" prd.md`.
+  - Re-run after `spec-approval` was approved: apply the `notes` adjustments, save to the task
+    manager (step "Saving the PRD", incl. the `spec_ready` trigger) and `SS status done refine`.
+- **`--result <file>`**: the last action is `SS result <file> products:spec` (success, stop or
+  failure).
+
+---
+
 ## Configuration
 
 Read `context-manifest.json` and `ai.properties.md` from the orchestrator to get repositories, base_path, and task_management_system.

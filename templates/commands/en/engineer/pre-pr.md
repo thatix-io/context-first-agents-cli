@@ -14,11 +14,14 @@ Read `context-manifest.json` and `ai.properties.md` from the orchestrator to get
 
 ## Mode and session state
 
-**Usage**: `/pre-pr <ISSUE-ID> [--headless]`.
+**Usage**: `/pre-pr <ISSUE-ID> [--headless] [--result <file>]`.
 - Default (interactive): as always — problems you cannot fix are brought to the user.
 - `--headless`: no question is asked. Every point that needs a person (a decision, missing
   access/credentials, a failure the fix agents could not solve) is **recorded in `needsHuman`**
   and the command **ends** — e.g. `claude -p "/pre-pr <ISSUE-ID> --headless"` in the orchestrator.
+- `--result <file>`: when the command ends (passed, stopped, or failed), its last action is
+  `SS result <file> engineer:pre-pr` → `{ command, issueId, status, phase, needsHuman, at }`
+  (protocol in `agents/HEADLESS.md`).
 
 Session state goes through the helper (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`,
 format in `SESSION-STATE.md`; if the helper is missing, edit `state.json` by hand):

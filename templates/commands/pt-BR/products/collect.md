@@ -18,6 +18,34 @@ Você é um especialista em produto responsável por coletar e documentar novas 
 
 ---
 
+## Modo (flags opcionais)
+
+**Uso**: `/collect "<ideia, feature ou bug>" [--headless] [--result <arquivo>]` — protocolo em
+`agents/HEADLESS.md` (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`).
+
+- Padrão (interativo): como sempre — perguntar, apresentar o rascunho, obter aprovação, salvar.
+- **`--headless`** — nenhuma pergunta é feita e não há rodada de aprovação:
+  1. **Dá para criar a issue?** É preciso pelo menos um título claro, o que se quer e por quê
+     (ou, num bug, onde acontece e o que está errado). Deduza tipo, repositórios afetados e
+     prioridade do texto, do manifest e do código (somente leitura); o que não deu para fechar
+     vai na issue em **"Perguntas em aberto"** (respondidas depois no `/refine`).
+  2. **Não dá** (vazio, vago demais para um título, ou vários pedidos sem relação misturados):
+     não crie nada — nem issue, nem sessão — grave o resultado sem sessão e encerre:
+     `node .claude/bin/session-state.mjs result <arquivo> products:collect --need collect-input decision "<o que falta>" "<opções concretas, ex.: (a) <leitura 1> (b) <leitura 2> — rode de novo /collect \"<ideia com o detalhe que falta>\" --headless>"`
+     (sem `--result`, apenas informe o mesmo).
+  3. **Dá** → crie a issue exatamente como no passo 5 abaixo (MCP, senão o fallback local) e
+     **abra a sessão** com o ID criado:
+     `SS set '{"issueId":"<ID>","title":"<título>"}'` e depois `SS status planned refine`.
+  4. Issue grande (> 5 dias, ver passo 3): crie **uma** issue com a divisão sugerida escrita no
+     corpo e registre a escolha:
+     `SS need collect-split decision "Dividir <ID> em issues menores?" "(a) manter uma issue (b) dividir como proposto: <lista> — responda nas notes do approval.json e rode /refine <ID> --headless, ou rode /refine <ID>"`.
+  5. `--result <arquivo>` → `SS result <arquivo> products:collect` (o `issueId` do resultado é a
+     issue criada) e encerre.
+- **`--result <arquivo>`** sem `--headless`: depois de salvar a issue, abra a sessão do mesmo jeito
+  (`SS set …` + `SS status planned refine`) e grave o resultado como acima.
+
+---
+
 ## 📋 Configuração do Projeto
 
 **⚠️ IMPORTANTE: Sempre leia os arquivos de configuração do projeto ANTES de executar este comando!**

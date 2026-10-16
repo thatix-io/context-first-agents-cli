@@ -16,8 +16,11 @@ runtime derives automatically. `/plan` and `/work` may still exist as manual esc
 - `--headless` — no gate asks a question: every human gate records a `needsHuman` item in
   `state.json`, sets the status and **ends the command**. For non-interactive runs, e.g.
   `claude -p "/orchestrate <ISSUE-ID> --plan-only --headless"` in the orchestrator directory.
+- `--result <file>` — when the command ends (finished, stopped at a gate, or failed), its last
+  action writes `{ command, issueId, status, phase, needsHuman, at }` to `<file>` (protocol in
+  `agents/HEADLESS.md`).
 
-`--plan-only` and `--resume` also work without `--headless`.
+`--plan-only`, `--resume` and `--result` also work without `--headless`.
 
 ---
 
@@ -45,8 +48,11 @@ runtime derives automatically. `/plan` and `/work` may still exist as manual esc
 
 ## Step 0 — Mode and session state
 
-1. Parse the flags from the arguments (`--plan-only`, `--resume`, `--headless`); the rest is the
-   ISSUE-ID / spec path. Keep the mode in mind for every gate below.
+1. Parse the flags from the arguments (`--plan-only`, `--resume`, `--headless`,
+   `--result <file>`); the rest is the ISSUE-ID / spec path. Keep the mode in mind for every
+   gate below. With `--result <file>`, **every** way this command ends — any "stop" below,
+   success or an unexpected failure (record it first: `SS need orchestrate-failed failure
+   "<what failed>" "<how to retry>"`) — ends with `SS result <file> orchestrate`.
 2. **State helper.** All session-level state goes through
    `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID> <command>` (abbreviated `SS` below —
    format in `SESSION-STATE.md`): `set '<json>'`, `status <status> [phase]`, `need <id> <kind>

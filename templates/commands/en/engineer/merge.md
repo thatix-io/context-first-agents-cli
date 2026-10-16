@@ -9,6 +9,9 @@ plus optional flags:
   are recorded in `needsHuman` and the command **ends** (nothing is merged).
 - `--resume` — continue after the confirmation was given outside the conversation, through
   `.sessions/<ISSUE-ID>/approval.json` (`{ approved, by, at, notes }`).
+- `--result <file>` — when the command ends (merged, stopped at a gate, or failed), its last
+  action is `SS result <file> engineer:merge` → `{ command, issueId, status, phase, needsHuman, at }`
+  (protocol in `agents/HEADLESS.md`).
 
 Session state goes through the helper (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`,
 format in `SESSION-STATE.md`; if the helper is missing, edit `state.json` by hand). On start:

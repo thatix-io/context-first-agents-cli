@@ -23,6 +23,9 @@ format in `SESSION-STATE.md`; if the helper is missing, edit `state.json` by han
 - Anything only a person can solve (no push permission, provider CLI not authenticated, a
   decision): `SS need pr-<slug> <access|decision|failure> "<reason>" "<how to resolve>" pr.md` and ask —
   with `--headless` (`/pr <ISSUE-ID> --headless`), do not ask: record it and end the command.
+- `--result <file>` (`/pr <ISSUE-ID> [--headless] --result <file>`): when the command ends (PRs
+  open, stopped, or failed), its last action is `SS result <file> engineer:pr` →
+  `{ command, issueId, status, phase, needsHuman, at }` (protocol in `agents/HEADLESS.md`).
 
 ## 🛑 CRITICAL: WHERE TO WORK
 

@@ -47,11 +47,14 @@ Después de leer los archivos, tendrás:
 
 ## Modo y estado de la sesión
 
-**Uso**: `/pre-pr <ISSUE-ID> [--headless]`.
+**Uso**: `/pre-pr <ISSUE-ID> [--headless] [--result <archivo>]`.
 - Por defecto (interactivo): como siempre — los problemas que no puedes corregir se llevan al usuario.
 - `--headless`: no se hace ninguna pregunta. Todo punto que necesite a una persona (una decisión,
   acceso/credenciales faltantes, una falla que los agentes de corrección no lograron resolver) se
   **registra en `needsHuman`** y el comando **termina** — ej.: `claude -p "/pre-pr <ISSUE-ID> --headless"` en el orquestador.
+- `--result <archivo>`: cuando el comando termina (aprobado, detenido o con falla), su última acción es
+  `SS result <archivo> engineer:pre-pr` → `{ command, issueId, status, phase, needsHuman, at }`
+  (protocolo en `agents/HEADLESS.md`).
 
 El estado de la sesión pasa por el helper (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`,
 formato en `SESSION-STATE.md`; si el helper no existe, edita `state.json` a mano):

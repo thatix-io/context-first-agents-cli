@@ -2,7 +2,7 @@
 // Single writer of a session's machine-readable state (.sessions/<ISSUE-ID>/state.json) and of
 // its append-only event log (.sessions/<ISSUE-ID>/events.jsonl). Commands call it instead of
 // hand-writing JSON, so status/phase/needsHuman/updatedAt and the events always agree.
-// Contract: SESSION-STATE.md (v0.15).
+// Contract: SESSION-STATE.md (v0.16).
 //
 //   node session-state.mjs <sessionDir> set '<json fields>'          merge fields (issueId, title, complexity, engine, repos, waves, runs, …)
 //   node session-state.mjs <sessionDir> status <status> [phase]      planned|awaiting_approval|running|blocked|done|pr_open|merged
@@ -13,6 +13,15 @@
 //   node session-state.mjs <sessionDir> approval                     read-only: is there a usable approval.json?
 //   node session-state.mjs <sessionDir> apply-approval               consume approval.json for the pending items
 //   node session-state.mjs <sessionDir> show                         print status, phase, needsHuman
+//   node session-state.mjs <sessionDir> result <file> <command> [opts]  write the run's result file (0.16)
+//   node session-state.mjs result <file> <command> [opts]              same, for a run without a session
+//     opts: --issue <id> · --status <status> · --phase <phase> ·
+//           --need <id> <kind> "<reason>" ["<howToResolve>"] ["<ref>"] · --need-json '<item | [items]>' (or `-`)
+//
+// `result` never writes state.json / events.jsonl: it reads them (session form) and writes
+// { command, issueId, status, phase, needsHuman, at } to <file> (absolute, or relative to the
+// cwd). Flags override what was read; --need / --need-json add items to the result only (status
+// is then derived from the items). Without a session, issueId / phase / status default to null.
 //
 // `need` upserts by id (keeps the original `since`) and moves the status: any non-approval item
 // → blocked; only approval items → awaiting_approval. `resolve` removes items; when none is left
@@ -27,20 +36,25 @@ const STATUSES = ['planned', 'awaiting_approval', 'running', 'blocked', 'done', 
 const PHASES = ['refine', 'plan', 'execute', 'pre-pr', 'pr', 'merge'];
 const KINDS = ['approval', 'decision', 'access', 'failure'];
 
-const [dirArg, cmd, ...rest] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+// `result` is the only command that may run without a session: `session-state.mjs result <file> …`.
+const sessionless = argv[0] === 'result';
+const [dirArg, cmd, ...rest] = sessionless ? [null, ...argv] : argv;
 const usage =
   'usage: session-state.mjs <sessionDir> set <json> | status <status> [phase] | phase <phase> | ' +
-  'need <id> <kind> <reason> [howToResolve] [ref] | need-json <json|-> | resolve <id…|--all> | approval | apply-approval | show';
+  'need <id> <kind> <reason> [howToResolve] [ref] | need-json <json|-> | resolve <id…|--all> | approval | apply-approval | show | ' +
+  'result <file> <command> [--issue <id>] [--status <s>] [--phase <p>] [--need …] [--need-json <json|->]\n' +
+  '       session-state.mjs result <file> <command> [same options]   (run without a session)';
 const fail = (msg) => {
   console.error(`session-state: ${msg}\n${usage}`);
   process.exit(2);
 };
-if (!dirArg || !cmd) fail('missing arguments');
+if ((!sessionless && !dirArg) || !cmd) fail('missing arguments');
 
-const dir = path.resolve(dirArg);
-const stateFile = path.join(dir, 'state.json');
-const eventsFile = path.join(dir, 'events.jsonl');
-const approvalFile = path.join(dir, 'approval.json');
+const dir = sessionless ? null : path.resolve(dirArg);
+const stateFile = dir && path.join(dir, 'state.json');
+const eventsFile = dir && path.join(dir, 'events.jsonl');
+const approvalFile = dir && path.join(dir, 'approval.json');
 const now = new Date().toISOString();
 
 const readJson = (file) => {
@@ -51,7 +65,7 @@ const readJson = (file) => {
   }
 };
 
-let state = readJson(stateFile) ?? {};
+let state = (dir && readJson(stateFile)) ?? {};
 if (typeof state !== 'object' || Array.isArray(state)) state = {};
 const before = { status: state.status, phase: state.phase };
 const events = [];
@@ -134,6 +148,85 @@ function readInput(arg) {
 
 const print = (obj) => process.stdout.write(JSON.stringify(obj) + '\n');
 
+/** A needsHuman item in the contract shape (validated like `upsert`, without touching state). */
+function normalizeItem(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('needsHuman item must be an object');
+  const id = String(raw.id ?? '').trim();
+  if (!id) fail('needsHuman item needs an id');
+  if (!KINDS.includes(raw.kind)) fail(`invalid kind "${raw.kind}" (${KINDS.join('|')})`);
+  return {
+    id,
+    kind: raw.kind,
+    reason: String(raw.reason ?? id),
+    since: raw.since ?? now,
+    howToResolve: raw.howToResolve ?? null,
+    ref: raw.ref ?? null,
+  };
+}
+
+/**
+ * `result <file> <command> [opts]` — the machine-readable outcome of one command run:
+ * { command, issueId, status, phase, needsHuman, at }. Read-only on the session.
+ */
+function writeResult(args) {
+  const [file, command, ...opts] = args;
+  if (!file) fail('result needs a file');
+  if (!command || command.startsWith('--')) fail('result needs the command name (e.g. orchestrate, products:collect)');
+  const o = { extra: [] };
+  for (let i = 0; i < opts.length; i++) {
+    const flag = opts[i];
+    const value = () => (i + 1 < opts.length ? opts[++i] : fail(`${flag} needs a value`));
+    switch (flag) {
+      case '--issue':
+        o.issueId = value();
+        break;
+      case '--status':
+        o.status = value();
+        if (!STATUSES.includes(o.status)) fail(`invalid status "${o.status}" (${STATUSES.join('|')})`);
+        break;
+      case '--phase':
+        o.phase = value();
+        if (!PHASES.includes(o.phase)) fail(`invalid phase "${o.phase}" (${PHASES.join('|')})`);
+        break;
+      case '--need': {
+        const parts = [];
+        while (i + 1 < opts.length && !opts[i + 1].startsWith('--') && parts.length < 5) parts.push(opts[++i]);
+        const [id, kind, reason, howToResolve, ref] = parts;
+        if (!id || !kind || !reason) fail('--need <id> <kind> <reason> [howToResolve] [ref]');
+        o.extra.push(normalizeItem({ id, kind, reason, howToResolve, ref }));
+        break;
+      }
+      case '--need-json': {
+        const input = readInput(value());
+        for (const raw of Array.isArray(input) ? input : [input]) o.extra.push(normalizeItem(raw));
+        break;
+      }
+      default:
+        fail(`unknown result option "${flag}"`);
+    }
+  }
+  // the session's items first, then the extra ones (an extra item replaces one with the same id)
+  const extraIds = new Set(o.extra.map((i) => i.id));
+  const needsHuman = [...items().filter((i) => !extraIds.has(i.id)), ...o.extra];
+  const derived = needsHuman.some((i) => i.kind !== 'approval') ? 'blocked' : 'awaiting_approval';
+  // old sessions without issueId in state.json: .sessions/<ISSUE-ID> → the directory name
+  const fromDir = dir && path.basename(path.dirname(dir)) === '.sessions' ? path.basename(dir) : null;
+  const out = {
+    command,
+    issueId: o.issueId ?? state.issueId ?? fromDir ?? null,
+    status: o.status ?? (o.extra.length ? derived : state.status ?? (needsHuman.length ? derived : null)),
+    phase: o.phase ?? state.phase ?? null,
+    needsHuman,
+    at: now,
+  };
+  const target = path.resolve(file);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  const tmp = `${target}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, JSON.stringify(out, null, 2) + '\n', 'utf-8');
+  fs.renameSync(tmp, target);
+  print({ written: target, ...out });
+}
+
 switch (cmd) {
   case 'set': {
     const patch = readInput(rest[0]);
@@ -195,6 +288,9 @@ switch (cmd) {
     }
     break;
   }
+  case 'result':
+    writeResult(rest);
+    break;
   case 'show':
     print({ status: state.status ?? null, phase: state.phase ?? null, needsHuman: items(), updatedAt: state.updatedAt ?? null });
     break;
@@ -202,7 +298,7 @@ switch (cmd) {
     fail(`unknown command "${cmd}"`);
 }
 
-if (dirty) {
+if (dirty && dir) {
   if (state.status !== before.status || state.phase !== before.phase) {
     // status line first, then the item lines of the same call (same timestamp)
     events.unshift({ at: now, type: 'status', status: state.status ?? null, phase: state.phase ?? null });

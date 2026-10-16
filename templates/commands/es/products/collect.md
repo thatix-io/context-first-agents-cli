@@ -18,6 +18,34 @@ Eres un especialista en producto responsable de recopilar y documentar nuevas id
 
 ---
 
+## Modo (flags opcionales)
+
+**Uso**: `/collect "<idea, feature o bug>" [--headless] [--result <archivo>]` — protocolo en
+`agents/HEADLESS.md` (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`).
+
+- Por defecto (interactivo): como siempre — preguntar, presentar el borrador, obtener aprobación, guardar.
+- **`--headless`** — no se hace ninguna pregunta y no hay ronda de aprobación:
+  1. **¿Alcanza para crear la issue?** Hace falta al menos un título claro, qué se quiere y por qué
+     (o, en un bug, dónde ocurre y qué está mal). Deduce tipo, repositorios afectados y prioridad
+     del texto, del manifiesto y del código (solo lectura); lo que no pudiste cerrar va en la issue
+     en **"Preguntas abiertas"** (se responden luego en `/refine`).
+  2. **No alcanza** (vacío, demasiado vago para un título, o varios pedidos sin relación mezclados):
+     no crees nada — ni issue, ni sesión — escribe el resultado sin sesión y termina:
+     `node .claude/bin/session-state.mjs result <archivo> products:collect --need collect-input decision "<qué falta>" "<opciones concretas, ej.: (a) <lectura 1> (b) <lectura 2> — vuelve a ejecutar /collect \"<idea con el detalle que falta>\" --headless>"`
+     (sin `--result`, solo informa lo mismo).
+  3. **Alcanza** → crea la issue exactamente como en el paso 5 de abajo (MCP, si no el fallback
+     local) y **abre la sesión** con el ID creado:
+     `SS set '{"issueId":"<ID>","title":"<título>"}'` y luego `SS status planned refine`.
+  4. Issue grande (> 5 días, ver paso 3): crea **una** issue con la división sugerida escrita en el
+     cuerpo y registra la elección:
+     `SS need collect-split decision "¿Dividir <ID> en issues más pequeñas?" "(a) mantener una issue (b) dividir como se propone: <lista> — responde en las notes de approval.json y ejecuta /refine <ID> --headless, o ejecuta /refine <ID>"`.
+  5. `--result <archivo>` → `SS result <archivo> products:collect` (el `issueId` del resultado es la
+     issue creada) y termina.
+- **`--result <archivo>`** sin `--headless`: tras guardar la issue, abre la sesión de la misma forma
+  (`SS set …` + `SS status planned refine`) y escribe el resultado como arriba.
+
+---
+
 ## 📋 Configuración del Proyecto
 
 **⚠️ IMPORTANTE: ¡Siempre lee los archivos de configuración del proyecto ANTES de ejecutar este comando!**

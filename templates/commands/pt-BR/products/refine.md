@@ -17,6 +17,35 @@ Você é um especialista em produto encarregado de ajudar a refinar requisitos p
 
 ---
 
+## Modo e estado da sessão
+
+**Uso**: `/refine <ISSUE-ID> [--headless] [--result <arquivo>]` — protocolo em
+`agents/HEADLESS.md` (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`;
+prefixo dos itens `refine-`).
+
+- No início: `SS set '{"issueId":"<ISSUE-ID>"}'` e depois `SS status running refine`. Se o `SS show`
+  listar itens `refine-*` / `collect-*` pendentes, consuma a resposta primeiro (`SS apply-approval`,
+  ver `agents/HEADLESS.md`) — as `notes` são as respostas da pessoa.
+- Padrão (interativo): como sempre — toda pergunta é feita na conversa. Quando os requisitos
+  refinados forem salvos: `SS status done refine`.
+- **`--headless`** — nenhuma pergunta é feita. Responda o que der pela issue, pelas metaspecs e
+  pelo código (somente leitura); escreva o que continuar em aberto em
+  `.sessions/<ISSUE-ID>/refine-questions.md`, registre cada item e encerre:
+  - Esclarecimento (objetivo, valor, escopo, interações) que você não consegue fechar →
+    `SS need refine-<slug> decision "<pergunta>" "(a) … (b) … (c) … — <como responder>" refine-questions.md`.
+  - Conflito com as metaspecs (Jidoka, passo 2) →
+    `SS need refine-conflict decision "<o que conflita com qual spec/ADR>" "(a) ajustar o requisito para … (b) manter e registrar exceção/ADR (c) retirar … — <como responder>" refine-questions.md`.
+  - Divisão sugerida (> 5 dias, passo 3) →
+    `SS need refine-split decision "Dividir <ISSUE-ID>?" "(a) manter uma issue (b) dividir em: <lista> — <como responder>" refined.md`.
+  - Nada em aberto → escreva o `refined.md` (marcado *rascunho — aguardando aprovação*) e registre
+    o gate de aprovação em vez de perguntar: `SS need refine-approval approval "Requisitos refinados prontos para revisão" "Leia o refined.md; aprove com approval.json (approved: true, ajustes em notes) e rode /refine <ISSUE-ID> --headless — approved: false rejeita" refined.md`.
+  - Nova execução depois que `refine-approval` foi aprovado: aplique os ajustes das `notes` no
+    `refined.md`, atualize o gerenciador de tarefas (passo 4) e `SS status done refine`.
+- **`--result <arquivo>`**: a última ação é `SS result <arquivo> products:refine` (sucesso, parada
+  ou falha).
+
+---
+
 ## 📋 Configuração do Projeto
 
 **⚠️ IMPORTANTE: Sempre leia os arquivos de configuração do projeto ANTES de executar este comando!**

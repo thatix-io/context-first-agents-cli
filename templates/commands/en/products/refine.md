@@ -17,6 +17,35 @@ You are a product expert responsible for helping to refine requirements for the 
 
 ---
 
+## Mode and session state
+
+**Usage**: `/refine <ISSUE-ID> [--headless] [--result <file>]` — protocol in
+`agents/HEADLESS.md` (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`;
+item prefix `refine-`).
+
+- On start: `SS set '{"issueId":"<ISSUE-ID>"}'` then `SS status running refine`. If `SS show`
+  lists pending `refine-*` / `collect-*` items, consume the answer first (`SS apply-approval`,
+  see `agents/HEADLESS.md`) — `notes` are the person's answers.
+- Default (interactive): as always — every question is asked in the conversation. When the
+  refined requirements are saved: `SS status done refine`.
+- **`--headless`** — no question is asked. Answer what you can from the issue, the metaspecs and
+  the code (read-only); write what is still open to `.sessions/<ISSUE-ID>/refine-questions.md`
+  and record each one, then end:
+  - Clarification (goal, value, scope, interactions) you cannot settle →
+    `SS need refine-<slug> decision "<question>" "(a) … (b) … (c) … — <how to answer>" refine-questions.md`.
+  - Conflict with the metaspecs (Jidoka, step 2) →
+    `SS need refine-conflict decision "<what conflicts with which spec/ADR>" "(a) adjust the requirement to … (b) keep it and record an exception/ADR (c) drop … — <how to answer>" refine-questions.md`.
+  - Split suggested (> 5 days, step 3) →
+    `SS need refine-split decision "Split <ISSUE-ID>?" "(a) keep one issue (b) split as: <list> — <how to answer>" refined.md`.
+  - Nothing open → write `refined.md` (marked *draft — awaiting approval*) and record the
+    approval gate instead of asking: `SS need refine-approval approval "Refined requirements ready for review" "Read refined.md; approve with approval.json (approved: true, adjustments in notes) and re-run /refine <ISSUE-ID> --headless — approved: false rejects" refined.md`.
+  - Re-run after `refine-approval` was approved: apply the `notes` adjustments to `refined.md`,
+    update the task manager (step 4) and `SS status done refine`.
+- **`--result <file>`**: the last action is `SS result <file> products:refine` (success, stop or
+  failure).
+
+---
+
 ## Configuration
 
 Read `context-manifest.json` and `ai.properties.md` from the orchestrator to get repositories, base_path, and task_management_system.

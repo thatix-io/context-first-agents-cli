@@ -16,8 +16,11 @@ deriva automaticamente. `/plan` e `/work` podem continuar existindo como escape 
 - `--headless` — nenhum gate faz pergunta: todo gate humano registra um item `needsHuman` no
   `state.json`, define o status e **encerra o comando**. Para execuções não interativas, ex.:
   `claude -p "/orchestrate <ISSUE-ID> --plan-only --headless"` no diretório do orquestrador.
+- `--result <arquivo>` — quando o comando termina (concluído, parado num gate ou com falha), a
+  última ação grava `{ command, issueId, status, phase, needsHuman, at }` em `<arquivo>`
+  (protocolo em `agents/HEADLESS.md`).
 
-`--plan-only` e `--resume` também funcionam sem `--headless`.
+`--plan-only`, `--resume` e `--result` também funcionam sem `--headless`.
 
 ---
 
@@ -45,8 +48,11 @@ deriva automaticamente. `/plan` e `/work` podem continuar existindo como escape 
 
 ## Passo 0 — Modo e estado da sessão
 
-1. Extraia as flags dos argumentos (`--plan-only`, `--resume`, `--headless`); o resto é o
-   ISSUE-ID / caminho da spec. Tenha o modo em mente em cada gate abaixo.
+1. Extraia as flags dos argumentos (`--plan-only`, `--resume`, `--headless`,
+   `--result <arquivo>`); o resto é o ISSUE-ID / caminho da spec. Tenha o modo em mente em cada
+   gate abaixo. Com `--result <arquivo>`, **toda** forma de encerrar este comando — qualquer
+   "pare" abaixo, sucesso ou falha inesperada (registre antes: `SS need orchestrate-failed failure
+   "<o que falhou>" "<como tentar de novo>"`) — termina com `SS result <arquivo> orchestrate`.
 2. **Helper de estado.** Todo estado no nível da sessão passa por
    `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID> <comando>` (abreviado `SS` abaixo —
    formato em `SESSION-STATE.md`): `set '<json>'`, `status <status> [phase]`, `need <id> <kind>

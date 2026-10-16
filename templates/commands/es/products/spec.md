@@ -17,6 +17,32 @@ Este comando crea la especificación completa (Product Requirements Document) de
 
 ---
 
+## Modo y estado de la sesión
+
+**Uso**: `/spec <ISSUE-ID> [--headless] [--result <archivo>]` — protocolo en
+`agents/HEADLESS.md` (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`;
+prefijo de los ítems `spec-`). El PRD es parte de la etapa de producto, así que la fase sigue en `refine`.
+
+- Al iniciar: `SS set '{"issueId":"<ISSUE-ID>"}'` y luego `SS status running refine`. Si `SS show`
+  lista ítems `spec-*` pendientes, consume la respuesta primero (`SS apply-approval`, ver
+  `agents/HEADLESS.md`) — las `notes` son las respuestas de la persona.
+- Por defecto (interactivo): como siempre. Cuando el PRD esté guardado y aprobado: `SS status done refine`.
+- **`--headless`** — no se hace ninguna pregunta y no hay revisión con stakeholders en la conversación:
+  - Sin requisitos refinados (`refined.md` / issue refinada) →
+    `SS need spec-refine-missing decision "<ISSUE-ID> no tiene requisitos refinados" "(a) ejecutar /refine <ISSUE-ID> antes (recomendado) (b) escribir el PRD a partir de la issue tal como está — <cómo responder>"` y termina.
+  - Requisito, regla o elección técnica que el PRD no puede cerrar con los requisitos refinados y
+    las metaspecs → escríbelo en `.sessions/<ISSUE-ID>/spec-questions.md` y
+    `SS need spec-<slug> decision "<pregunta>" "(a) … (b) … — <cómo responder>" spec-questions.md`;
+    termina tras registrarlos todos.
+  - Nada abierto → guarda el PRD en `.sessions/<ISSUE-ID>/prd.md` (siempre, en este modo) y registra
+    el gate de revisión: `SS need spec-approval approval "PRD listo para aprobación" "Lee prd.md; aprueba con approval.json (approved: true, ajustes en notes) y ejecuta /spec <ISSUE-ID> --headless — approved: false rechaza" prd.md`.
+  - Nueva ejecución tras aprobarse `spec-approval`: aplica los ajustes de las `notes`, guarda en el
+    gestor de tareas (sección "Guardado del PRD", incl. el disparador `spec_ready`) y `SS status done refine`.
+- **`--result <archivo>`**: la última acción es `SS result <archivo> products:spec` (éxito,
+  detención o falla).
+
+---
+
 ## 📋 Configuración del Proyecto
 
 **⚠️ IMPORTANTE: ¡Siempre lea los archivos de configuración del proyecto ANTES de ejecutar este comando!**

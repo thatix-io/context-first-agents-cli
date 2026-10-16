@@ -17,6 +17,32 @@ Este comando cria a especificação completa (Product Requirements Document) da 
 
 ---
 
+## Modo e estado da sessão
+
+**Uso**: `/spec <ISSUE-ID> [--headless] [--result <arquivo>]` — protocolo em
+`agents/HEADLESS.md` (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`;
+prefixo dos itens `spec-`). O PRD faz parte da etapa de produto, então a fase continua `refine`.
+
+- No início: `SS set '{"issueId":"<ISSUE-ID>"}'` e depois `SS status running refine`. Se o `SS show`
+  listar itens `spec-*` pendentes, consuma a resposta primeiro (`SS apply-approval`, ver
+  `agents/HEADLESS.md`) — as `notes` são as respostas da pessoa.
+- Padrão (interativo): como sempre. Quando o PRD estiver salvo e aprovado: `SS status done refine`.
+- **`--headless`** — nenhuma pergunta é feita e não há revisão com stakeholders na conversa:
+  - Sem requisitos refinados (`refined.md` / issue refinada) →
+    `SS need spec-refine-missing decision "<ISSUE-ID> não tem requisitos refinados" "(a) rodar /refine <ISSUE-ID> antes (recomendado) (b) escrever o PRD a partir da issue como está — <como responder>"` e encerre.
+  - Requisito, regra ou escolha técnica que o PRD não consegue fechar pelos requisitos refinados
+    e pelas metaspecs → escreva em `.sessions/<ISSUE-ID>/spec-questions.md` e
+    `SS need spec-<slug> decision "<pergunta>" "(a) … (b) … — <como responder>" spec-questions.md`;
+    encerre depois de registrar todos.
+  - Nada em aberto → salve o PRD em `.sessions/<ISSUE-ID>/prd.md` (sempre, neste modo) e registre o
+    gate de revisão: `SS need spec-approval approval "PRD pronto para aprovação" "Leia o prd.md; aprove com approval.json (approved: true, ajustes em notes) e rode /spec <ISSUE-ID> --headless — approved: false rejeita" prd.md`.
+  - Nova execução depois que `spec-approval` foi aprovado: aplique os ajustes das `notes`, salve no
+    gerenciador de tarefas (seção "Salvamento do PRD", incl. o gatilho `spec_ready`) e `SS status done refine`.
+- **`--result <arquivo>`**: a última ação é `SS result <arquivo> products:spec` (sucesso, parada
+  ou falha).
+
+---
+
 ## 📋 Configuração do Projeto
 
 **⚠️ IMPORTANTE: Sempre leia os arquivos de configuração do projeto ANTES de executar este comando!**

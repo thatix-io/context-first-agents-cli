@@ -18,6 +18,34 @@ You are a product specialist responsible for collecting and documenting new idea
 
 ---
 
+## Mode (optional flags)
+
+**Usage**: `/collect "<idea, feature or bug>" [--headless] [--result <file>]` — protocol in
+`agents/HEADLESS.md` (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`).
+
+- Default (interactive): as always — ask, present the draft, get approval, save.
+- **`--headless`** — no question is asked and there is no approval round:
+  1. **Enough to create the issue?** You need at least a clear title, what is wanted and why
+     (or, for a bug, where it happens and what is wrong). Infer type, affected repositories
+     and priority from the text, the manifest and the code (read-only); whatever you could not
+     settle goes into the issue under **"Open Questions"** (answered later in `/refine`).
+  2. **Not enough** (empty, too vague to title, or several unrelated requests mixed together):
+     create nothing — no issue, no session — write the result without a session and end:
+     `node .claude/bin/session-state.mjs result <file> products:collect --need collect-input decision "<what is missing>" "<concrete options, e.g. (a) <reading 1> (b) <reading 2> — re-run /collect \"<idea with the missing detail>\" --headless>"`
+     (with no `--result`, just report the same thing).
+  3. **Enough** → create the issue exactly as in step 5 below (MCP, else the local fallback)
+     and **open the session** with the created ID:
+     `SS set '{"issueId":"<ID>","title":"<title>"}'` then `SS status planned refine`.
+  4. Large issue (> 5 days, see step 3): create it as **one** issue with the suggested split
+     written in its body, and record the choice:
+     `SS need collect-split decision "Split <ID> into smaller issues?" "(a) keep one issue (b) split as proposed: <list> — answer in approval.json notes and run /refine <ID> --headless, or run /refine <ID>"`.
+  5. `--result <file>` → `SS result <file> products:collect` (the result's `issueId` is the
+     created issue) and end.
+- **`--result <file>`** without `--headless`: after saving the issue, open the session the same
+  way (`SS set …` + `SS status planned refine`) and write the result as above.
+
+---
+
 ## Configuration
 
 Read `context-manifest.json` and `ai.properties.md` from the orchestrator to get repositories, base_path, and task_management_system.

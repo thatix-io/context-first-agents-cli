@@ -9,6 +9,9 @@ mais flags opcionais:
   são registrados em `needsHuman` e o comando **termina** (nada é mergeado).
 - `--resume` — continua depois que a confirmação foi dada fora da conversa, via
   `.sessions/<ISSUE-ID>/approval.json` (`{ approved, by, at, notes }`).
+- `--result <arquivo>` — quando o comando termina (mergeado, parado num gate ou com falha), a
+  última ação é `SS result <arquivo> engineer:merge` → `{ command, issueId, status, phase, needsHuman, at }`
+  (protocolo em `agents/HEADLESS.md`).
 
 O estado da sessão passa pelo helper (`SS` = `node .claude/bin/session-state.mjs .sessions/<ISSUE-ID>`,
 formato em `SESSION-STATE.md`; se o helper não existir, edite o `state.json` à mão). No início:

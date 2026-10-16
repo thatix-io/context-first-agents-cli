@@ -1,6 +1,7 @@
-# Session State Schema (contract v0.15)
+# Session State Schema (contract v0.16)
 
-The flow commands (`/orchestrate`, `/pre-pr`, `/pr`, `/merge`) write machine-readable state
+The flow commands (`/collect`, `/refine`, `/spec`, `/orchestrate`, `/test-env`, `/pre-pr`, `/pr`,
+`/merge`) write machine-readable state
 into each session directory so any tool — `context-agents dashboard`, `context-agents status
 --json`, CI, a script — can tell where a session is and **whether it is waiting on a human**,
 without reading the conversation. Human-readable `execution-plan.md` stays alongside.
@@ -52,6 +53,8 @@ without reading the conversation. Human-readable `execution-plan.md` stays along
   | `pr_open` | pull/merge requests are open |
   | `merged` | the feature was merged |
 - `phase`: `refine` → `plan` → `execute` → `pre-pr` → `pr` → `merge` (where the session is in the flow).
+  `refine` is the whole product stage (`/collect` opens it, `/refine` and `/spec` work in it);
+  `/test-env` never changes the phase.
 - `needsHuman[]`: **everything that waits on a person goes here** — the plan waiting for approval,
   blocked workers, escalated spawn proposals, `NEEDS-HUMAN` conflicts, the merge confirmation. Empty
   array when nothing is pending. `kind`: `approval` (say yes/no), `decision` (choose/answer),
@@ -64,11 +67,13 @@ without reading the conversation. Human-readable `execution-plan.md` stays along
 - `waves`: array of arrays of worker ids, in execution order.
 - `engine` (optional): `workflow` (Engine B — the `orchestrate-execute` workflow) or `task`
   (Engine A fallback — Task-tool waves).
+- `testEnv` (optional, 0.16, `/test-env`): `{ status: up|down, urls, stop, at, previousStatus }`.
 - `runs` (optional, Engine B): `[{ "runId": "wf_…", "startedAt": "…", "status": "…" }]`, one per
   workflow run of this session — the last `runId` is what `resumeFromRunId` uses.
 
-**Single writer:** only the orchestrator (the `/orchestrate` main loop, and `/pre-pr` / `/pr` /
-`/merge` when they run) writes `state.json` — through the helper below. Workers never write it.
+**Single writer:** only the command that is running (the `/orchestrate` main loop, or `/collect`,
+`/refine`, `/spec`, `/test-env`, `/pre-pr`, `/pr`, `/merge`) writes `state.json` — through the
+helper below. Workers never write it.
 
 ## `events.jsonl` — append-only
 
@@ -117,6 +122,52 @@ With `--headless` no gate asks a question: every human gate records a `needsHuma
 status and ends the command. Without flags the interactive behavior is unchanged (gates ask in the
 conversation) — and the pending gate is still recorded in `state.json` while it waits.
 
+Since 0.16 the product commands and `/test-env` also take `--headless`, and every command that
+takes `--headless` also takes `--result <file>` (shared protocol: `.claude/commands/agents/HEADLESS.md`):
+
+```bash
+claude -p "/collect \"Export orders as CSV\" --headless --result out/collect.json"  # creates the issue + session
+claude -p "/refine ISSUE-42 --headless --result out/refine.json"   # questions → needsHuman (decision), stop
+claude -p "/spec ISSUE-42 --headless --result out/spec.json"       # prd.md + spec-approval, stop
+claude -p "/test-env ISSUE-42 --headless --result out/env.json"
+```
+
+- **Questions become `decision` items** whose `howToResolve` lists the concrete options and how to
+  answer; the detail goes to a session file (`ref`, e.g. `refine-questions.md`). The answer is an
+  `approval.json` (`approved: true`, the choices in `notes`) followed by a re-run of the same
+  command — it consumes the answer first (`apply-approval`). Ids are prefixed by the command:
+  `collect-*`, `refine-*`, `spec-*`, `testenv-*`.
+- **Artifact reviews stay approvals**: `/refine --headless` writes `refined.md` and records
+  `refine-approval`; `/spec --headless` writes `prd.md` and records `spec-approval`
+  (`awaiting_approval`). The task manager is updated after the approval.
+- **`/collect --headless`** creates the issue without an approval round and opens
+  `.sessions/<ID>/` (`planned · refine`). Not enough to create an issue → nothing is created; the
+  result file carries `issueId: null` and a `collect-input` decision.
+
+## Result file — `--result <file>` (0.16)
+
+When a command run with `--result <file>` ends — success, stopped at a gate, or failure — its last
+action writes one JSON object to `<file>` (absolute, or relative to the directory the command runs
+in), through the helper:
+
+```jsonc
+{
+  "command": "products:refine",     // the command id: its path under .claude/commands with ':'
+  "issueId": "ISSUE-42",            // /collect: the issue it created · null when there is no session
+  "status": "awaiting_approval",    // the session status at the end (never "running" for a finished run)
+  "phase": "refine",                // null when there is no session
+  "needsHuman": [{ "id": "refine-approval", "kind": "approval", "reason": "…", "since": "…", "howToResolve": "…", "ref": "refined.md" }],
+  "at": "2026-10-16T12:00:00Z"
+}
+```
+
+- Command ids: `orchestrate`, `engineer:pre-pr`, `engineer:pr`, `engineer:merge`,
+  `products:collect`, `products:refine`, `products:spec`, `engineer:test-env`.
+- The file is replaced on every run (atomic write); the session's `state.json` / `events.jsonl` are
+  not touched by it.
+- A run that fails unexpectedly first records `<prefix>-failed` (`kind: failure`), so the result
+  says `blocked` with the reason instead of a stale `running`.
+
 ## The helper — `.claude/bin/session-state.mjs`
 
 Commands never hand-write `state.json` / `events.jsonl`; they call the helper, which validates the
@@ -136,6 +187,9 @@ node $S $D resolve plan-approval                  # or: resolve --all
 node $S $D approval                               # read-only: approved | rejected | missing | stale | invalid
 node $S $D apply-approval                         # consume approval.json (see above)
 node $S $D show
+node $S $D result out/result.json products:refine # write the result file (reads state.json; read-only)
+node $S result out/result.json products:collect \
+  --need collect-input decision "Too vague to create an issue" "(a) … (b) … — re-run /collect with …"   # no session
 ```
 
 `need` / `need-json` also move `status` (`blocked` / `awaiting_approval`). After `resolve`, set the
@@ -217,6 +271,11 @@ context-agents status --json [--project <dir>]…   # default: this orchestrator
 
 | Moment | `status` · `phase` | needsHuman |
 |---|---|---|
+| `/collect` created the issue (0.16) | `planned` · `refine` | `collect-split` (decision) if a split is suggested |
+| `/refine` / `/spec` working | `running` · `refine` | — |
+| `/refine` / `/spec` with open questions (`--headless`) | `blocked` · `refine` | `refine-*` / `spec-*` (decision) |
+| `refined.md` / `prd.md` ready (`--headless`) | `awaiting_approval` · `refine` | `refine-approval` / `spec-approval` (approval) |
+| `/refine` / `/spec` finished | `done` · `refine` | — |
 | `/orchestrate` starts | `planned` · `plan` | — |
 | plan ready, waiting for approval | `awaiting_approval` · `plan` | `plan-approval` (approval) |
 | approved (chat or `approval.json`) → execution | `running` · `execute` | resolve `plan-approval` |
@@ -228,6 +287,7 @@ context-agents status --json [--project <dir>]…   # default: this orchestrator
 | `/pr` opened the PRs | `pr_open` · `pr` | — |
 | `/merge` waiting for confirmation | `awaiting_approval` · `merge` | `merge-confirmation` (approval) |
 | merged | `merged` · `merge` | — |
+| `/test-env` needs a person (0.16) | `blocked` · *(unchanged)* | `testenv-*`; back to `testEnv.previousStatus` when resolved |
 
 Workers (Engine A: the orchestrator on their behalf):
 1. Right after the graph is approved: one `workers/<id>.json` per node (`status: "pending"`).
